@@ -186,36 +186,38 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	}
 	language := n.Language(source)
 
-	highlightLinesIdx := -1
-
-	for idx, char := range language {
-		if char == '{' {
-			highlightLinesIdx = idx
-			break
-		}
-	}
-
-	var linesStr []string
 	doHlLines := false
-	if highlightLinesIdx > 0 && language[len(language)-1] == '}' {
-		doHlLines = true
-		rangesStr := string(language[highlightLinesIdx+1:len(language)-1])
-		linesStr = strings.Split(rangesStr, ",")
-	}
 	hlRanges := [][2]int{}
-	for _, l := range linesStr {
-		num, err := strconv.Atoi(l)
-		if err != nil {
-			doHlLines = false
-			break
-		}
-		hlRanges = append(hlRanges, [2]int{num, num})
-	}
-
 	chromaFormatterOptions := r.FormatOptions
-	if doHlLines {
-		language = language[:highlightLinesIdx]
-		chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
+	if language != nil {
+		highlightLinesIdx := -1
+
+		for idx, char := range language {
+			if char == '{' {
+				highlightLinesIdx = idx
+				break
+			}
+		}
+
+		var linesStr []string
+		if highlightLinesIdx > 0 && language[len(language)-1] == '}' {
+			doHlLines = true
+			rangesStr := string(language[highlightLinesIdx+1 : len(language)-1])
+			linesStr = strings.Split(rangesStr, ",")
+		}
+		for _, l := range linesStr {
+			num, err := strconv.Atoi(l)
+			if err != nil {
+				doHlLines = false
+				break
+			}
+			hlRanges = append(hlRanges, [2]int{num, num})
+		}
+
+		if doHlLines {
+			language = language[:highlightLinesIdx]
+			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
+		}
 	}
 
 	var lexer chroma.Lexer
