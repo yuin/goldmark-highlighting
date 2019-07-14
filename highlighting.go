@@ -7,12 +7,15 @@ package highlighting
 import (
 	"bytes"
 	"io"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/util"
+
+	"strconv"
 
 	"github.com/alecthomas/chroma"
 	chromahtml "github.com/alecthomas/chroma/formatters/html"
@@ -182,6 +185,39 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		return ast.WalkContinue, nil
 	}
 	language := n.Language(source)
+
+	highlightLinesIdx := -1
+
+	for idx, char := range language {
+		if char == '{' {
+			highlightLinesIdx = idx
+			break
+		}
+	}
+
+	var linesStr []string
+	doHlLines := false
+	if highlightLinesIdx > 0 && language[len(language)-1] == '}' {
+		doHlLines = true
+		rangesStr := string(language[highlightLinesIdx+1:len(language)-1])
+		linesStr = strings.Split(rangesStr, ",")
+	}
+	hlRanges := [][2]int{}
+	for _, l := range linesStr {
+		num, err := strconv.Atoi(l)
+		if err != nil {
+			doHlLines = false
+			break
+		}
+		hlRanges = append(hlRanges, [2]int{num, num})
+	}
+
+	chromaFormatterOptions := r.FormatOptions
+	if doHlLines {
+		language = language[:highlightLinesIdx]
+		chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
+	}
+
 	var lexer chroma.Lexer
 	if language != nil {
 		lexer = lexers.Get(string(language))
@@ -200,7 +236,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		}
 		iterator, err := lexer.Tokenise(nil, buffer.String())
 		if err == nil {
-			formatter := chromahtml.New(r.FormatOptions...)
+			formatter := chromahtml.New(chromaFormatterOptions...)
 			rendered = formatter.Format(w, style, iterator) == nil
 			if rendered && r.CSSWriter != nil {
 				_ = formatter.WriteCSS(r.CSSWriter, style)
