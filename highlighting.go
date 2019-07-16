@@ -7,15 +7,14 @@ package highlighting
 import (
 	"bytes"
 	"io"
-	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
-
-	"strconv"
 
 	"github.com/alecthomas/chroma"
 	chromahtml "github.com/alecthomas/chroma/formatters/html"
@@ -99,6 +98,7 @@ func WithHTMLOptions(opts ...html.Option) Option {
 }
 
 const optStyle renderer.OptionName = "HighlightingStyle"
+const highlightLinesAttrName = "hl_lines"
 
 type withStyle struct {
 	value string
@@ -190,33 +190,38 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	hlRanges := [][2]int{}
 	chromaFormatterOptions := r.FormatOptions
 	if language != nil {
-		highlightLinesIdx := -1
+		attrStartIdx := -1
 
 		for idx, char := range language {
 			if char == '{' {
-				highlightLinesIdx = idx
+				attrStartIdx = idx
 				break
 			}
 		}
 
-		var linesStr []string
-		if highlightLinesIdx > 0 && language[len(language)-1] == '}' {
-			doHlLines = true
-			rangesStr := string(language[highlightLinesIdx+1 : len(language)-1])
-			linesStr = strings.Split(rangesStr, ",")
-		}
-		for _, l := range linesStr {
-			num, err := strconv.Atoi(l)
-			if err != nil {
+		if attrStartIdx > 0 {
+			attrStr := language[attrStartIdx:]
+			attrs, hasAttr := parser.ParseAttributes(text.NewReader(attrStr))
+			if !hasAttr {
 				doHlLines = false
-				break
 			}
-			hlRanges = append(hlRanges, [2]int{num, num})
-		}
+			if linesAttr, hasLinesAttr := attrs[highlightLinesAttrName]; hasLinesAttr {
+				lines, ok := linesAttr.([]interface{})
+				if !ok {
+					doHlLines = false
+				} else {
+					doHlLines = true
+					for _, l := range lines {
+						ln := int(l.(float64))
+						hlRanges = append(hlRanges, [2]int{ln, ln})
+					}
+				}
+			}
 
-		if doHlLines {
-			language = language[:highlightLinesIdx]
-			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
+			if doHlLines {
+				language = language[:attrStartIdx]
+				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
+			}
 		}
 	}
 
