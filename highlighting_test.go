@@ -2,7 +2,6 @@ package highlighting
 
 import (
 	"bytes"
-	"fmt"
 	"strings"
 	"testing"
 
