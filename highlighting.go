@@ -221,7 +221,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 
 	chromaFormatterOptions := r.FormatOptions
 	style := styles.Get(r.Style)
-	nohl := true
+	nohl := false
 
 	attrs, language := getAttrbite(n, language)
 	if attrs != nil {
