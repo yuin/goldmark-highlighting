@@ -102,6 +102,7 @@ func WithHTMLOptions(opts ...html.Option) Option {
 const optStyle renderer.OptionName = "HighlightingStyle"
 const highlightLinesAttrName = "hl_lines"
 const styleAttrName = "style"
+const nohlAttrName = "nohl"
 
 type withStyle struct {
 	value string
@@ -220,6 +221,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 
 	chromaFormatterOptions := r.FormatOptions
 	style := styles.Get(r.Style)
+	nohl := true
 
 	attrs, language := getAttrbite(n, language)
 	if attrs != nil {
@@ -250,6 +252,9 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 			styleStr := string([]byte(styleAttr.([]uint8)))
 			style = styles.Get(styleStr)
 		}
+		if _, hasNohlAttr := attrs[nohlAttrName]; hasNohlAttr {
+			nohl = true
+		}
 	}
 
 	var lexer chroma.Lexer
@@ -257,7 +262,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		lexer = lexers.Get(string(language))
 	}
 	rendered := false
-	if lexer != nil {
+	if !nohl && lexer != nil {
 		if style == nil {
 			style = styles.Fallback
 		}
