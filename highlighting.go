@@ -101,7 +101,7 @@ func WithHTMLOptions(opts ...html.Option) Option {
 
 const optStyle renderer.OptionName = "HighlightingStyle"
 const highlightLinesAttrName = "hl_lines"
-const styleAttrName = "style"
+const styleAttrName = "hl_style"
 const nohlAttrName = "nohl"
 
 type withStyle struct {
