@@ -7,11 +7,15 @@ package highlighting
 import (
 	"bytes"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 
 	"github.com/alecthomas/chroma"
@@ -96,6 +100,9 @@ func WithHTMLOptions(opts ...html.Option) Option {
 }
 
 const optStyle renderer.OptionName = "HighlightingStyle"
+const highlightLinesAttrName = "hl_lines"
+const styleAttrName = "hl_style"
+const nohlAttrName = "nohl"
 
 type withStyle struct {
 	value string
@@ -176,19 +183,86 @@ func (r *HTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindFencedCodeBlock, r.renderFencedCodeBlock)
 }
 
+func getAttrbite(node *ast.FencedCodeBlock, infostr []byte) (map[string]interface{}, []byte) {
+	if node.Attributes() != nil {
+		r := make(map[string]interface{})
+		for _, a := range node.Attributes() {
+			r[string(a.Name)] = a.Value
+		}
+		return r, infostr
+	}
+
+	if infostr != nil {
+		attrStartIdx := -1
+
+		for idx, char := range infostr {
+			if char == '{' {
+				attrStartIdx = idx
+				break
+			}
+		}
+
+		if attrStartIdx > 0 {
+			attrStr := infostr[attrStartIdx:]
+			if attrs, hasAttr := parser.ParseAttributes(text.NewReader(attrStr)); hasAttr {
+				return attrs, infostr[:attrStartIdx]
+			}
+		}
+	}
+	return nil, infostr
+}
+
 func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	n := node.(*ast.FencedCodeBlock)
 	if !entering {
 		return ast.WalkContinue, nil
 	}
 	language := n.Language(source)
+
+	chromaFormatterOptions := r.FormatOptions
+	style := styles.Get(r.Style)
+	nohl := false
+
+	attrs, language := getAttrbite(n, language)
+	if attrs != nil {
+		if linesAttr, hasLinesAttr := attrs[highlightLinesAttrName]; hasLinesAttr {
+			if lines, ok := linesAttr.([]interface{}); ok {
+				var hlRanges [][2]int
+				for _, l := range lines {
+					if ln, ok := l.(float64); ok {
+						hlRanges = append(hlRanges, [2]int{int(ln), int(ln)})
+					}
+					if rng, ok := l.([]uint8); ok {
+						slices := strings.Split(string([]byte(rng)), "-")
+						lhs, err := strconv.Atoi(slices[0])
+						if err != nil {
+							continue
+						}
+						rhs, err := strconv.Atoi(slices[1])
+						if err != nil {
+							continue
+						}
+						hlRanges = append(hlRanges, [2]int{lhs, rhs})
+					}
+				}
+				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
+			}
+		}
+		if styleAttr, hasStyleAttr := attrs[styleAttrName]; hasStyleAttr {
+			styleStr := string([]byte(styleAttr.([]uint8)))
+			style = styles.Get(styleStr)
+		}
+		if _, hasNohlAttr := attrs[nohlAttrName]; hasNohlAttr {
+			nohl = true
+		}
+	}
+
 	var lexer chroma.Lexer
 	if language != nil {
 		lexer = lexers.Get(string(language))
 	}
 	rendered := false
-	if lexer != nil {
-		style := styles.Get(r.Style)
+	if !nohl && lexer != nil {
 		if style == nil {
 			style = styles.Fallback
 		}
@@ -200,7 +274,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		}
 		iterator, err := lexer.Tokenise(nil, buffer.String())
 		if err == nil {
-			formatter := chromahtml.New(r.FormatOptions...)
+			formatter := chromahtml.New(chromaFormatterOptions...)
 			rendered = formatter.Format(w, style, iterator) == nil
 			if rendered && r.CSSWriter != nil {
 				_ = formatter.WriteCSS(r.CSSWriter, style)

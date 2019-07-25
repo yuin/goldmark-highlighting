@@ -2,10 +2,11 @@ package highlighting
 
 import (
 	"bytes"
-	chromahtml "github.com/alecthomas/chroma/formatters/html"
-	"github.com/yuin/goldmark"
 	"strings"
 	"testing"
+
+	chromahtml "github.com/alecthomas/chroma/formatters/html"
+	"github.com/yuin/goldmark"
 )
 
 func TestHighlighting(t *testing.T) {
@@ -136,5 +137,36 @@ func main() {
 `) {
 		t.Error("failed to render HTML")
 	}
+}
 
+func TestHighlighting3(t *testing.T) {
+	markdown := goldmark.New(
+		goldmark.WithExtensions(
+			Highlighting,
+		),
+	)
+	var buffer bytes.Buffer
+	if err := markdown.Convert([]byte(`
+Title
+=======
+
+`+"```"+`cpp{hl_lines=[1,2]}
+#include <iostream>
+int main() {
+    std::cout<< "hello" << std::endl;
+}
+`+"```"+`
+`), &buffer); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+<h1>Title</h1>
+<pre style="background-color:#fff"><span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#999;font-weight:bold;font-style:italic">#</span><span style="color:#999;font-weight:bold;font-style:italic">include</span> <span style="color:#999;font-weight:bold;font-style:italic">&lt;iostream&gt;</span><span style="color:#999;font-weight:bold;font-style:italic">
+</span></span><span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#999;font-weight:bold;font-style:italic"></span><span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">main</span>() {
+</span>    std<span style="color:#000;font-weight:bold">:</span><span style="color:#000;font-weight:bold">:</span>cout<span style="color:#000;font-weight:bold">&lt;</span><span style="color:#000;font-weight:bold">&lt;</span> <span style="color:#d14"></span><span style="color:#d14">&#34;</span><span style="color:#d14">hello</span><span style="color:#d14">&#34;</span> <span style="color:#000;font-weight:bold">&lt;</span><span style="color:#000;font-weight:bold">&lt;</span> std<span style="color:#000;font-weight:bold">:</span><span style="color:#000;font-weight:bold">:</span>endl;
+}
+</pre>
+`) {
+		t.Error("failed to render HTML")
+	}
 }
