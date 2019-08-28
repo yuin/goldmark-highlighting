@@ -100,9 +100,11 @@ func WithHTMLOptions(opts ...html.Option) Option {
 }
 
 const optStyle renderer.OptionName = "HighlightingStyle"
-const highlightLinesAttrName = "hl_lines"
-const styleAttrName = "hl_style"
-const nohlAttrName = "nohl"
+
+var highlightLinesAttrName = []byte("hl_lines")
+
+var styleAttrName = []byte("hl_style")
+var nohlAttrName = []byte("nohl")
 
 type withStyle struct {
 	value string
@@ -183,11 +185,11 @@ func (r *HTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindFencedCodeBlock, r.renderFencedCodeBlock)
 }
 
-func getAttrbite(node *ast.FencedCodeBlock, infostr []byte) (map[string]interface{}, []byte) {
+func getAttributes(node *ast.FencedCodeBlock, infostr []byte) (parser.Attributes, []byte) {
 	if node.Attributes() != nil {
-		r := make(map[string]interface{})
+		r := parser.Attributes{}
 		for _, a := range node.Attributes() {
-			r[string(a.Name)] = a.Value
+			r = append(r, parser.Attribute{Name: a.Name, Value: a.Value})
 		}
 		return r, infostr
 	}
@@ -223,9 +225,9 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	style := styles.Get(r.Style)
 	nohl := false
 
-	attrs, language := getAttrbite(n, language)
+	attrs, language := getAttributes(n, language)
 	if attrs != nil {
-		if linesAttr, hasLinesAttr := attrs[highlightLinesAttrName]; hasLinesAttr {
+		if linesAttr, hasLinesAttr := attrs.Find(highlightLinesAttrName); hasLinesAttr {
 			if lines, ok := linesAttr.([]interface{}); ok {
 				var hlRanges [][2]int
 				for _, l := range lines {
@@ -248,11 +250,11 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
 			}
 		}
-		if styleAttr, hasStyleAttr := attrs[styleAttrName]; hasStyleAttr {
+		if styleAttr, hasStyleAttr := attrs.Find(styleAttrName); hasStyleAttr {
 			styleStr := string([]byte(styleAttr.([]uint8)))
 			style = styles.Get(styleStr)
 		}
-		if _, hasNohlAttr := attrs[nohlAttrName]; hasNohlAttr {
+		if _, hasNohlAttr := attrs.Find(nohlAttrName); hasNohlAttr {
 			nohl = true
 		}
 	}
