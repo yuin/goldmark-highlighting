@@ -7,6 +7,8 @@ import (
 
 	chromahtml "github.com/alecthomas/chroma/formatters/html"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/util"
 )
 
 func TestHighlighting(t *testing.T) {
@@ -20,6 +22,25 @@ func TestHighlighting(t *testing.T) {
 					chromahtml.WithLineNumbers(),
 					chromahtml.WithClasses(),
 				),
+				WithWrapperRenderer(func(w util.BufWriter, language []byte, attrs parser.Attributes, entering bool) {
+					if entering {
+						if language == nil {
+							w.WriteString("<pre><code>")
+							return
+						}
+						w.WriteString(`<div class="highlight"><pre class="chroma"><code class="language-`)
+						w.Write(language)
+						w.WriteString(` hljs" data-lang="`)
+						w.Write(language)
+						w.WriteString(`">`)
+					} else {
+						if language == nil {
+							w.WriteString("</pre></code>")
+							return
+						}
+						w.WriteString(`</code></pre></div>`)
+					}
+				}),
 			),
 		),
 	)
@@ -37,10 +58,10 @@ func main() {
 	}
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
 <h1>Title</h1>
-<pre class="chroma"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
+<div class="highlight"><pre class="chroma"><code class="language-go hljs" data-lang="go"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
 <span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
 <span class="ln">3</span><span class="p">}</span>
-</pre>
+</code></pre></div>
 `) {
 		t.Error("failed to render HTML")
 	}
@@ -119,7 +140,7 @@ func TestHighlighting2(t *testing.T) {
 	if err := markdown.Convert([]byte(`
 Title
 =======
-`+"``` unknown"+`
+`+"```"+`
 func main() {
     fmt.Println("ok")
 }
@@ -130,7 +151,7 @@ func main() {
 
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
 <h1>Title</h1>
-<pre><code class="language-unknown">func main() {
+<pre><code>func main() {
     fmt.Println(&quot;ok&quot;)
 }
 </code></pre>

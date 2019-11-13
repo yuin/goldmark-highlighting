@@ -24,6 +24,9 @@ import (
 	"github.com/alecthomas/chroma/styles"
 )
 
+// WrapperRenderer renders wrapper elements like div, pre, etc.
+type WrapperRenderer func(w util.BufWriter, language []byte, attrs parser.Attributes, entering bool)
+
 // Config struct holds options for the extension.
 type Config struct {
 	html.Config
@@ -39,15 +42,19 @@ type Config struct {
 	// CSSWriter is an io.Writer that will be used as CSS data output buffer.
 	// If WithClasses() is enabled, you can get CSS data corresponds to the style.
 	CSSWriter io.Writer
+
+	// WrapperRenderer allows you to change wrapper elements.
+	WrapperRenderer WrapperRenderer
 }
 
 // NewConfig returns a new Config with defaults.
 func NewConfig() Config {
 	return Config{
-		Config:        html.NewConfig(),
-		Style:         "github",
-		FormatOptions: []chromahtml.Option{},
-		CSSWriter:     nil,
+		Config:          html.NewConfig(),
+		Style:           "github",
+		FormatOptions:   []chromahtml.Option{},
+		CSSWriter:       nil,
+		WrapperRenderer: nil,
 	}
 }
 
@@ -62,6 +69,8 @@ func (c *Config) SetOption(name renderer.OptionName, value interface{}) {
 		}
 	case optCSSWriter:
 		c.CSSWriter = value.(io.Writer)
+	case optWrapperRenderer:
+		c.WrapperRenderer = value.(WrapperRenderer)
 	default:
 		c.Config.SetOption(name, value)
 	}
@@ -140,6 +149,26 @@ func (o *withCSSWriter) SetHighlightingOption(c *Config) {
 // WithCSSWriter is a functional option that sets io.Writer for CSS data.
 func WithCSSWriter(w io.Writer) Option {
 	return &withCSSWriter{w}
+}
+
+const optWrapperRenderer renderer.OptionName = "HighlightingWrapperRenderer"
+
+type withWrapperRenderer struct {
+	value WrapperRenderer
+}
+
+func (o *withWrapperRenderer) SetConfig(c *renderer.Config) {
+	c.Options[optWrapperRenderer] = o.value
+}
+
+func (o *withWrapperRenderer) SetHighlightingOption(c *Config) {
+	c.WrapperRenderer = o.value
+}
+
+// WithWrapperRenderer is a functional option that sets WrapperRenderer that
+// renders wrapper elements like div, pre, etc.
+func WithWrapperRenderer(w WrapperRenderer) Option {
+	return &withWrapperRenderer{w}
 }
 
 const optFormatOptions renderer.OptionName = "HighlightingFormatOptions"
@@ -263,7 +292,6 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	if language != nil {
 		lexer = lexers.Get(string(language))
 	}
-	rendered := false
 	if !nohl && lexer != nil {
 		if style == nil {
 			style = styles.Fallback
@@ -276,25 +304,44 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		}
 		iterator, err := lexer.Tokenise(nil, buffer.String())
 		if err == nil {
+			if r.WrapperRenderer != nil {
+				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.PreventSurroundingPre())
+			}
 			formatter := chromahtml.New(chromaFormatterOptions...)
-			rendered = formatter.Format(w, style, iterator) == nil
-			if rendered && r.CSSWriter != nil {
+			if r.WrapperRenderer != nil {
+				r.WrapperRenderer(w, language, attrs, true)
+			}
+			_ = formatter.Format(w, style, iterator) == nil
+			if r.WrapperRenderer != nil {
+				r.WrapperRenderer(w, language, attrs, false)
+			}
+			if r.CSSWriter != nil {
 				_ = formatter.WriteCSS(r.CSSWriter, style)
 			}
+			return ast.WalkContinue, nil
 		}
 	}
 
-	if !rendered {
+	if r.WrapperRenderer != nil {
+		r.WrapperRenderer(w, language, attrs, true)
+	} else {
 		_, _ = w.WriteString("<pre><code")
-		_, _ = w.WriteString(" class=\"language-")
-		r.Writer.Write(w, language)
-		_, _ = w.WriteString("\"")
-		_ = w.WriteByte('>')
-		l := n.Lines().Len()
-		for i := 0; i < l; i++ {
-			line := n.Lines().At(i)
-			r.Writer.RawWrite(w, line.Value(source))
+		language := n.Language(source)
+		if language != nil {
+			_, _ = w.WriteString(" class=\"language-")
+			r.Writer.Write(w, language)
+			_, _ = w.WriteString("\"")
 		}
+		_ = w.WriteByte('>')
+	}
+	l := n.Lines().Len()
+	for i := 0; i < l; i++ {
+		line := n.Lines().At(i)
+		r.Writer.RawWrite(w, line.Value(source))
+	}
+	if r.WrapperRenderer != nil {
+		r.WrapperRenderer(w, language, attrs, false)
+	} else {
 		_, _ = w.WriteString("</code></pre>\n")
 	}
 	return ast.WalkContinue, nil
