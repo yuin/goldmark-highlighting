@@ -4,6 +4,6 @@ go 1.12
 
 require (
 	github.com/alecthomas/chroma v0.6.3
-	github.com/yuin/goldmark v1.1.0
+	github.com/yuin/goldmark v1.1.2
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 )
