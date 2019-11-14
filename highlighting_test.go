@@ -2,6 +2,7 @@ package highlighting
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -190,4 +191,53 @@ int main() {
 `) {
 		t.Error("failed to render HTML")
 	}
+}
+
+func TestHighlightingHlLines(t *testing.T) {
+	markdown := goldmark.New(
+		goldmark.WithExtensions(
+			NewHighlighting(
+				WithFormatOptions(
+					chromahtml.WithClasses(),
+				),
+			),
+		),
+	)
+
+	for i, test := range []struct {
+		hl_lines string
+		expect   []int
+	}{
+		{`["2"]`, []int{2}},
+	} {
+
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+
+			var buffer bytes.Buffer
+			codeBlock := fmt.Sprintf(`bash{hl_lines=%s}
+LINE1
+LINE2
+LINE3
+LINE4
+LINE5
+LINE6
+LINE7
+LINE8
+`, test.hl_lines)
+
+			if err := markdown.Convert([]byte(`
+`+"```"+codeBlock+"```"+`
+`), &buffer); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, line := range test.expect {
+				expectStr := fmt.Sprintf("<span class=\"hl\">LINE%d\n</span>", line)
+				if !strings.Contains(buffer.String(), expectStr) {
+					t.Fatal("got\n", buffer.String(), "\nexpected\n", expectStr)
+				}
+			}
+		})
+	}
+
 }

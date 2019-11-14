@@ -269,9 +269,12 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 						if err != nil {
 							continue
 						}
-						rhs, err := strconv.Atoi(slices[1])
-						if err != nil {
-							continue
+						rhs := lhs
+						if len(slices) > 1 {
+							rhs, err = strconv.Atoi(slices[1])
+							if err != nil {
+								continue
+							}
 						}
 						hlRanges = append(hlRanges, [2]int{lhs, rhs})
 					}
