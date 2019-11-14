@@ -25,7 +25,7 @@ import (
 )
 
 // WrapperRenderer renders wrapper elements like div, pre, etc.
-type WrapperRenderer func(w util.BufWriter, language []byte, attrs parser.Attributes, entering bool)
+type WrapperRenderer func(w util.BufWriter, language []byte, highlight bool, attrs parser.Attributes, entering bool)
 
 // Config struct holds options for the extension.
 type Config struct {
@@ -309,11 +309,11 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 			}
 			formatter := chromahtml.New(chromaFormatterOptions...)
 			if r.WrapperRenderer != nil {
-				r.WrapperRenderer(w, language, attrs, true)
+				r.WrapperRenderer(w, language, true, attrs, true)
 			}
 			_ = formatter.Format(w, style, iterator) == nil
 			if r.WrapperRenderer != nil {
-				r.WrapperRenderer(w, language, attrs, false)
+				r.WrapperRenderer(w, language, true, attrs, false)
 			}
 			if r.CSSWriter != nil {
 				_ = formatter.WriteCSS(r.CSSWriter, style)
@@ -323,7 +323,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	}
 
 	if r.WrapperRenderer != nil {
-		r.WrapperRenderer(w, language, attrs, true)
+		r.WrapperRenderer(w, language, false, attrs, true)
 	} else {
 		_, _ = w.WriteString("<pre><code")
 		language := n.Language(source)
@@ -340,7 +340,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		r.Writer.RawWrite(w, line.Value(source))
 	}
 	if r.WrapperRenderer != nil {
-		r.WrapperRenderer(w, language, attrs, false)
+		r.WrapperRenderer(w, language, false, attrs, false)
 	} else {
 		_, _ = w.WriteString("</code></pre>\n")
 	}
