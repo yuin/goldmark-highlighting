@@ -22,7 +22,7 @@ func TestHighlighting(t *testing.T) {
 					chromahtml.WithLineNumbers(),
 					chromahtml.WithClasses(),
 				),
-				WithWrapperRenderer(func(w util.BufWriter, language []byte, attrs parser.Attributes, entering bool) {
+				WithWrapperRenderer(func(w util.BufWriter, language []byte, highlight bool, attrs parser.Attributes, entering bool) {
 					if entering {
 						if language == nil {
 							w.WriteString("<pre><code>")
