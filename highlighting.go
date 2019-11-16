@@ -188,6 +188,7 @@ var highlightLinesAttrName = []byte("hl_lines")
 
 var styleAttrName = []byte("hl_style")
 var nohlAttrName = []byte("nohl")
+var linenosAttrName = []byte("linenos")
 var linenostartAttrName = []byte("linenostart")
 
 type withStyle struct {
@@ -367,6 +368,9 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		}
 		if linenostartAttr, ok := attrs.Get(linenostartAttrName); ok {
 			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.BaseLineNumber(int(linenostartAttr.(float64))))
+		}
+		if linenosAttr, ok := attrs.Get(linenosAttrName); ok && linenosAttr.(bool) {
+			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.WithLineNumbers())
 		}
 	}
 

@@ -19,7 +19,6 @@ func TestHighlighting(t *testing.T) {
 				WithStyle("monokai"),
 				WithCSSWriter(&css),
 				WithFormatOptions(
-					chromahtml.WithLineNumbers(),
 					chromahtml.WithClasses(),
 				),
 				WithWrapperRenderer(func(w util.BufWriter, c CodeBlockContext, entering bool) {
@@ -49,7 +48,7 @@ func TestHighlighting(t *testing.T) {
 	if err := markdown.Convert([]byte(`
 Title
 =======
-`+"``` go"+` {linenostart=10}
+`+"``` go"+` {linenos=true, linenostart=10}
 func main() {
     fmt.Println("ok")
 }
