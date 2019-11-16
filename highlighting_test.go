@@ -49,7 +49,7 @@ func TestHighlighting(t *testing.T) {
 	if err := markdown.Convert([]byte(`
 Title
 =======
-`+"``` go"+`
+`+"``` go"+` {linenostart=10}
 func main() {
     fmt.Println("ok")
 }
@@ -59,9 +59,9 @@ func main() {
 	}
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
 <h1>Title</h1>
-<div class="highlight"><pre class="chroma"><code class="language-go hljs" data-lang="go"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
-<span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
-<span class="ln">3</span><span class="p">}</span>
+<div class="highlight"><pre class="chroma"><code class="language-go hljs" data-lang="go"><span class="ln">10</span><span class="kd">func</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
+<span class="ln">11</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
+<span class="ln">12</span><span class="p">}</span>
 </code></pre></div>
 `) {
 		t.Error("failed to render HTML")
@@ -172,7 +172,7 @@ func TestHighlighting3(t *testing.T) {
 Title
 =======
 
-`+"```"+`cpp{hl_lines=[1,2]}
+`+"```"+`cpp {hl_lines=[1,2]}
 #include <iostream>
 int main() {
     std::cout<< "hello" << std::endl;
@@ -214,7 +214,7 @@ func TestHighlightingHlLines(t *testing.T) {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 
 			var buffer bytes.Buffer
-			codeBlock := fmt.Sprintf(`bash{hl_lines=%s}
+			codeBlock := fmt.Sprintf(`bash {hl_lines=%s}
 LINE1
 LINE2
 LINE3

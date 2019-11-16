@@ -24,6 +24,39 @@ import (
 	"github.com/alecthomas/chroma/styles"
 )
 
+// ImmutableAttributes is a read-only interface for ast.Attributes.
+type ImmutableAttributes interface {
+	// Get returns (value, true) if an attribute associated with given
+	// name exists, otherwise (nil, false)
+	Get(name []byte) (interface{}, bool)
+
+	// GetString returns (value, true) if an attribute associated with given
+	// name exists, otherwise (nil, false)
+	GetString(name string) (interface{}, bool)
+
+	// All returns all attributes.
+	All() []ast.Attribute
+}
+
+type immutableAttributes struct {
+	n ast.Node
+}
+
+func (a *immutableAttributes) Get(name []byte) (interface{}, bool) {
+	return a.n.Attribute(name)
+}
+
+func (a *immutableAttributes) GetString(name string) (interface{}, bool) {
+	return a.n.AttributeString(name)
+}
+
+func (a *immutableAttributes) All() []ast.Attribute {
+	if a.n.Attributes() == nil {
+		return []ast.Attribute{}
+	}
+	return a.n.Attributes()
+}
+
 // CodeBlockContext holds contextual information of code highlighting.
 type CodeBlockContext interface {
 	// Language returns (language, true) if specified, otherwise (nil, false).
@@ -33,16 +66,16 @@ type CodeBlockContext interface {
 	Highlighted() bool
 
 	// Attributes return attributes of the code block.
-	Attributes() parser.Attributes
+	Attributes() ImmutableAttributes
 }
 
 type codeBlockContext struct {
 	language    []byte
 	highlighted bool
-	attributes  parser.Attributes
+	attributes  ImmutableAttributes
 }
 
-func newCodeBlockContext(language []byte, highlighted bool, attrs parser.Attributes) CodeBlockContext {
+func newCodeBlockContext(language []byte, highlighted bool, attrs ImmutableAttributes) CodeBlockContext {
 	return &codeBlockContext{
 		language:    language,
 		highlighted: highlighted,
@@ -61,7 +94,7 @@ func (c *codeBlockContext) Highlighted() bool {
 	return c.highlighted
 }
 
-func (c *codeBlockContext) Attributes() parser.Attributes {
+func (c *codeBlockContext) Attributes() ImmutableAttributes {
 	return c.attributes
 }
 
@@ -155,6 +188,7 @@ var highlightLinesAttrName = []byte("hl_lines")
 
 var styleAttrName = []byte("hl_style")
 var nohlAttrName = []byte("nohl")
+var linenostartAttrName = []byte("linenostart")
 
 type withStyle struct {
 	value string
@@ -255,15 +289,10 @@ func (r *HTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindFencedCodeBlock, r.renderFencedCodeBlock)
 }
 
-func getAttributes(node *ast.FencedCodeBlock, infostr []byte) (parser.Attributes, []byte) {
+func getAttributes(node *ast.FencedCodeBlock, infostr []byte) ImmutableAttributes {
 	if node.Attributes() != nil {
-		r := parser.Attributes{}
-		for _, a := range node.Attributes() {
-			r = append(r, parser.Attribute{Name: a.Name, Value: a.Value})
-		}
-		return r, infostr
+		return &immutableAttributes{node}
 	}
-
 	if infostr != nil {
 		attrStartIdx := -1
 
@@ -273,15 +302,18 @@ func getAttributes(node *ast.FencedCodeBlock, infostr []byte) (parser.Attributes
 				break
 			}
 		}
-
 		if attrStartIdx > 0 {
+			n := ast.NewTextBlock() // dummy node for storing attributes
 			attrStr := infostr[attrStartIdx:]
 			if attrs, hasAttr := parser.ParseAttributes(text.NewReader(attrStr)); hasAttr {
-				return attrs, infostr[:attrStartIdx]
+				for _, attr := range attrs {
+					n.SetAttribute(attr.Name, attr.Value)
+				}
+				return &immutableAttributes{n}
 			}
 		}
 	}
-	return nil, infostr
+	return nil
 }
 
 func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -290,14 +322,17 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		return ast.WalkContinue, nil
 	}
 	language := n.Language(source)
-
 	chromaFormatterOptions := r.FormatOptions
 	style := styles.Get(r.Style)
 	nohl := false
 
-	attrs, language := getAttributes(n, language)
+	var info []byte
+	if n.Info != nil {
+		info = n.Info.Segment.Value(source)
+	}
+	attrs := getAttributes(n, info)
 	if attrs != nil {
-		if linesAttr, hasLinesAttr := attrs.Find(highlightLinesAttrName); hasLinesAttr {
+		if linesAttr, hasLinesAttr := attrs.Get(highlightLinesAttrName); hasLinesAttr {
 			if lines, ok := linesAttr.([]interface{}); ok {
 				var hlRanges [][2]int
 				for _, l := range lines {
@@ -323,12 +358,15 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
 			}
 		}
-		if styleAttr, hasStyleAttr := attrs.Find(styleAttrName); hasStyleAttr {
+		if styleAttr, hasStyleAttr := attrs.Get(styleAttrName); hasStyleAttr {
 			styleStr := string([]byte(styleAttr.([]uint8)))
 			style = styles.Get(styleStr)
 		}
-		if _, hasNohlAttr := attrs.Find(nohlAttrName); hasNohlAttr {
+		if _, hasNohlAttr := attrs.Get(nohlAttrName); hasNohlAttr {
 			nohl = true
+		}
+		if linenostartAttr, ok := attrs.Get(linenostartAttrName); ok {
+			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.BaseLineNumber(int(linenostartAttr.(float64))))
 		}
 	}
 
