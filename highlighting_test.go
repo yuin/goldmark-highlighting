@@ -8,7 +8,6 @@ import (
 
 	chromahtml "github.com/alecthomas/chroma/formatters/html"
 	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/util"
 )
 
@@ -23,9 +22,10 @@ func TestHighlighting(t *testing.T) {
 					chromahtml.WithLineNumbers(),
 					chromahtml.WithClasses(),
 				),
-				WithWrapperRenderer(func(w util.BufWriter, language []byte, highlight bool, attrs parser.Attributes, entering bool) {
+				WithWrapperRenderer(func(w util.BufWriter, c CodeBlockContext, entering bool) {
+					language, ok := c.Language()
 					if entering {
-						if language == nil {
+						if !ok {
 							w.WriteString("<pre><code>")
 							return
 						}
@@ -35,7 +35,7 @@ func TestHighlighting(t *testing.T) {
 						w.Write(language)
 						w.WriteString(`">`)
 					} else {
-						if language == nil {
+						if !ok {
 							w.WriteString("</pre></code>")
 							return
 						}

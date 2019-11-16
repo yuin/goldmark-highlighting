@@ -24,8 +24,49 @@ import (
 	"github.com/alecthomas/chroma/styles"
 )
 
+// CodeBlockContext holds contextual information of code highlighting.
+type CodeBlockContext interface {
+	// Language returns (language, true) if specified, otherwise (nil, false).
+	Language() ([]byte, bool)
+
+	// Highlighted returns true if this code block can be highlighted, otherwise false.
+	Highlighted() bool
+
+	// Attributes return attributes of the code block.
+	Attributes() parser.Attributes
+}
+
+type codeBlockContext struct {
+	language    []byte
+	highlighted bool
+	attributes  parser.Attributes
+}
+
+func newCodeBlockContext(language []byte, highlighted bool, attrs parser.Attributes) CodeBlockContext {
+	return &codeBlockContext{
+		language:    language,
+		highlighted: highlighted,
+		attributes:  attrs,
+	}
+}
+
+func (c *codeBlockContext) Language() ([]byte, bool) {
+	if c.language != nil {
+		return c.language, true
+	}
+	return nil, false
+}
+
+func (c *codeBlockContext) Highlighted() bool {
+	return c.highlighted
+}
+
+func (c *codeBlockContext) Attributes() parser.Attributes {
+	return c.attributes
+}
+
 // WrapperRenderer renders wrapper elements like div, pre, etc.
-type WrapperRenderer func(w util.BufWriter, language []byte, highlight bool, attrs parser.Attributes, entering bool)
+type WrapperRenderer func(w util.BufWriter, context CodeBlockContext, entering bool)
 
 // Config struct holds options for the extension.
 type Config struct {
@@ -311,12 +352,14 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.PreventSurroundingPre())
 			}
 			formatter := chromahtml.New(chromaFormatterOptions...)
+			var c CodeBlockContext
 			if r.WrapperRenderer != nil {
-				r.WrapperRenderer(w, language, true, attrs, true)
+				c = newCodeBlockContext(language, true, attrs)
+				r.WrapperRenderer(w, c, true)
 			}
 			_ = formatter.Format(w, style, iterator) == nil
 			if r.WrapperRenderer != nil {
-				r.WrapperRenderer(w, language, true, attrs, false)
+				r.WrapperRenderer(w, c, false)
 			}
 			if r.CSSWriter != nil {
 				_ = formatter.WriteCSS(r.CSSWriter, style)
@@ -325,8 +368,10 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		}
 	}
 
+	var c CodeBlockContext
 	if r.WrapperRenderer != nil {
-		r.WrapperRenderer(w, language, false, attrs, true)
+		c = newCodeBlockContext(language, false, attrs)
+		r.WrapperRenderer(w, c, true)
 	} else {
 		_, _ = w.WriteString("<pre><code")
 		language := n.Language(source)
@@ -343,7 +388,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		r.Writer.RawWrite(w, line.Value(source))
 	}
 	if r.WrapperRenderer != nil {
-		r.WrapperRenderer(w, language, false, attrs, false)
+		r.WrapperRenderer(w, c, false)
 	} else {
 		_, _ = w.WriteString("</code></pre>\n")
 	}
