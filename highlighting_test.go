@@ -205,7 +205,7 @@ func TestHighlightingHlLines(t *testing.T) {
 
 	for i, test := range []struct {
 		attributes string
-		expect   []int
+		expect     []int
 	}{
 		{`hl_lines=["2"]`, []int{2}},
 		{`hl_lines=["2-3",5],linenostart=5`, []int{2, 3, 5}},
@@ -240,5 +240,32 @@ LINE8
 			}
 		})
 	}
+
+}
+
+func TestHighlightingLineNumbersInTable(t *testing.T) {
+	markdown := goldmark.New(
+		goldmark.WithExtensions(
+			NewHighlighting(
+				WithFormatOptions(
+					//chromahtml.PreventSurroundingPre(),
+					chromahtml.WithClasses(),
+					chromahtml.LineNumbersInTable(),
+				),
+			),
+		),
+	)
+
+	content := "```bash {linenos=true}\n" + `
+echo "Hello"
+` + "\n```"
+
+	var buffer bytes.Buffer
+
+	if err := markdown.Convert([]byte(content), &buffer); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(buffer.String())
 
 }
