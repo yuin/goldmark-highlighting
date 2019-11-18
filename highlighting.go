@@ -333,12 +333,17 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	}
 	attrs := getAttributes(n, info)
 	if attrs != nil {
+		baseLineNumber := 1
+		if linenostartAttr, ok := attrs.Get(linenostartAttrName); ok {
+			baseLineNumber = int(linenostartAttr.(float64))
+			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.BaseLineNumber(baseLineNumber))
+		}
 		if linesAttr, hasLinesAttr := attrs.Get(highlightLinesAttrName); hasLinesAttr {
 			if lines, ok := linesAttr.([]interface{}); ok {
 				var hlRanges [][2]int
 				for _, l := range lines {
 					if ln, ok := l.(float64); ok {
-						hlRanges = append(hlRanges, [2]int{int(ln), int(ln)})
+						hlRanges = append(hlRanges, [2]int{int(ln) + baseLineNumber - 1, int(ln) + baseLineNumber - 1})
 					}
 					if rng, ok := l.([]uint8); ok {
 						slices := strings.Split(string([]byte(rng)), "-")
@@ -353,7 +358,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 								continue
 							}
 						}
-						hlRanges = append(hlRanges, [2]int{lhs, rhs})
+						hlRanges = append(hlRanges, [2]int{lhs + baseLineNumber - 1, rhs + baseLineNumber - 1})
 					}
 				}
 				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
@@ -365,9 +370,6 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		}
 		if _, hasNohlAttr := attrs.Get(nohlAttrName); hasNohlAttr {
 			nohl = true
-		}
-		if linenostartAttr, ok := attrs.Get(linenostartAttrName); ok {
-			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.BaseLineNumber(int(linenostartAttr.(float64))))
 		}
 		if linenosAttr, ok := attrs.Get(linenosAttrName); ok && linenosAttr.(bool) {
 			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.WithLineNumbers())

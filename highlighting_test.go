@@ -204,16 +204,18 @@ func TestHighlightingHlLines(t *testing.T) {
 	)
 
 	for i, test := range []struct {
-		hl_lines string
+		attributes string
 		expect   []int
 	}{
-		{`["2"]`, []int{2}},
+		{`hl_lines=["2"]`, []int{2}},
+		{`hl_lines=["2-3",5],linenostart=5`, []int{2, 3, 5}},
+		{`hl_lines=["2-3"]`, []int{2, 3}},
 	} {
 
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 
 			var buffer bytes.Buffer
-			codeBlock := fmt.Sprintf(`bash {hl_lines=%s}
+			codeBlock := fmt.Sprintf(`bash {%s}
 LINE1
 LINE2
 LINE3
@@ -222,7 +224,7 @@ LINE5
 LINE6
 LINE7
 LINE8
-`, test.hl_lines)
+`, test.attributes)
 
 			if err := markdown.Convert([]byte(`
 `+"```"+codeBlock+"```"+`
