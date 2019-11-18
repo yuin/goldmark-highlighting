@@ -101,6 +101,9 @@ func (c *codeBlockContext) Attributes() ImmutableAttributes {
 // WrapperRenderer renders wrapper elements like div, pre, etc.
 type WrapperRenderer func(w util.BufWriter, context CodeBlockContext, entering bool)
 
+// CodeBlockOptions creates Chroma options per code block.
+type CodeBlockOptions func(ctx CodeBlockContext) []chromahtml.Option
+
 // Config struct holds options for the extension.
 type Config struct {
 	html.Config
@@ -117,6 +120,9 @@ type Config struct {
 	// If WithClasses() is enabled, you can get CSS data corresponds to the style.
 	CSSWriter io.Writer
 
+	// CodeBlockOptions allows set Chroma options per code block.
+	CodeBlockOptions CodeBlockOptions
+
 	// WrapperRenderer allows you to change wrapper elements.
 	WrapperRenderer WrapperRenderer
 }
@@ -124,11 +130,12 @@ type Config struct {
 // NewConfig returns a new Config with defaults.
 func NewConfig() Config {
 	return Config{
-		Config:          html.NewConfig(),
-		Style:           "github",
-		FormatOptions:   []chromahtml.Option{},
-		CSSWriter:       nil,
-		WrapperRenderer: nil,
+		Config:           html.NewConfig(),
+		Style:            "github",
+		FormatOptions:    []chromahtml.Option{},
+		CSSWriter:        nil,
+		WrapperRenderer:  nil,
+		CodeBlockOptions: nil,
 	}
 }
 
@@ -145,6 +152,8 @@ func (c *Config) SetOption(name renderer.OptionName, value interface{}) {
 		c.CSSWriter = value.(io.Writer)
 	case optWrapperRenderer:
 		c.WrapperRenderer = value.(WrapperRenderer)
+	case optCodeBlockOptions:
+		c.CodeBlockOptions = value.(CodeBlockOptions)
 	default:
 		c.Config.SetOption(name, value)
 	}
@@ -189,6 +198,8 @@ var highlightLinesAttrName = []byte("hl_lines")
 var styleAttrName = []byte("hl_style")
 var nohlAttrName = []byte("nohl")
 var linenosAttrName = []byte("linenos")
+var linenosTableAttrValue = []byte("table")
+var linenosInlineAttrValue = []byte("inline")
 var linenostartAttrName = []byte("linenostart")
 
 type withStyle struct {
@@ -245,6 +256,26 @@ func (o *withWrapperRenderer) SetHighlightingOption(c *Config) {
 // renders wrapper elements like div, pre, etc.
 func WithWrapperRenderer(w WrapperRenderer) Option {
 	return &withWrapperRenderer{w}
+}
+
+const optCodeBlockOptions renderer.OptionName = "HighlightingCodeBlockOptions"
+
+type withCodeBlockOptions struct {
+	value CodeBlockOptions
+}
+
+func (o *withCodeBlockOptions) SetConfig(c *renderer.Config) {
+	c.Options[optWrapperRenderer] = o.value
+}
+
+func (o *withCodeBlockOptions) SetHighlightingOption(c *Config) {
+	c.CodeBlockOptions = o.value
+}
+
+// WithCodeBlockOptions is a functional option that sets CodeBlockOptions that
+// allows setting Chroma options per code block.
+func WithCodeBlockOptions(c CodeBlockOptions) Option {
+	return &withCodeBlockOptions{value: c}
 }
 
 const optFormatOptions renderer.OptionName = "HighlightingFormatOptions"
@@ -323,7 +354,9 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		return ast.WalkContinue, nil
 	}
 	language := n.Language(source)
-	chromaFormatterOptions := r.FormatOptions
+
+	chromaFormatterOptions := make([]chromahtml.Option, len(r.FormatOptions))
+	copy(chromaFormatterOptions, r.FormatOptions)
 	style := styles.Get(r.Style)
 	nohl := false
 
@@ -371,8 +404,21 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		if _, hasNohlAttr := attrs.Get(nohlAttrName); hasNohlAttr {
 			nohl = true
 		}
-		if linenosAttr, ok := attrs.Get(linenosAttrName); ok && linenosAttr.(bool) {
-			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.WithLineNumbers())
+
+		if linenosAttr, ok := attrs.Get(linenosAttrName); ok {
+			switch v := linenosAttr.(type) {
+			case bool:
+				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.WithLineNumbers(v))
+			case []uint8:
+				if v != nil {
+					chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.WithLineNumbers(true))
+				}
+				if bytes.Equal(v, linenosTableAttrValue) {
+					chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.LineNumbersInTable(true))
+				} else if bytes.Equal(v, linenosInlineAttrValue) {
+					chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.LineNumbersInTable(false))
+				}
+			}
 		}
 	}
 
@@ -392,13 +438,13 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 		}
 		iterator, err := lexer.Tokenise(nil, buffer.String())
 		if err == nil {
-			if r.WrapperRenderer != nil {
-				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.PreventSurroundingPre())
+			c := newCodeBlockContext(language, true, attrs)
+
+			if r.CodeBlockOptions != nil {
+				chromaFormatterOptions = append(chromaFormatterOptions, r.CodeBlockOptions(c)...)
 			}
 			formatter := chromahtml.New(chromaFormatterOptions...)
-			var c CodeBlockContext
 			if r.WrapperRenderer != nil {
-				c = newCodeBlockContext(language, true, attrs)
 				r.WrapperRenderer(w, c, true)
 			}
 			_ = formatter.Format(w, style, iterator) == nil
