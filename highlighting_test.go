@@ -19,27 +19,35 @@ func TestHighlighting(t *testing.T) {
 				WithStyle("monokai"),
 				WithCSSWriter(&css),
 				WithFormatOptions(
-					chromahtml.WithClasses(),
+					chromahtml.WithClasses(true),
+					chromahtml.WithLineNumbers(false),
 				),
 				WithWrapperRenderer(func(w util.BufWriter, c CodeBlockContext, entering bool) {
-					language, ok := c.Language()
+					_, ok := c.Language()
 					if entering {
 						if !ok {
 							w.WriteString("<pre><code>")
 							return
 						}
-						w.WriteString(`<div class="highlight"><pre class="chroma"><code class="language-`)
-						w.Write(language)
-						w.WriteString(` hljs" data-lang="`)
-						w.Write(language)
-						w.WriteString(`">`)
+						w.WriteString(`<div class="highlight">`)
 					} else {
 						if !ok {
 							w.WriteString("</pre></code>")
 							return
 						}
-						w.WriteString(`</code></pre></div>`)
+						w.WriteString(`</div>`)
 					}
+				}),
+				WithCodeBlockOptions(func(c CodeBlockContext) []chromahtml.Option {
+					if language, ok := c.Language(); ok {
+						// Turn on line numbers for Go only.
+						if string(language) == "go" {
+							return []chromahtml.Option{
+								chromahtml.WithLineNumbers(true),
+							}
+						}
+					}
+					return nil
 				}),
 			),
 		),
@@ -48,20 +56,20 @@ func TestHighlighting(t *testing.T) {
 	if err := markdown.Convert([]byte(`
 Title
 =======
-`+"``` go"+` {linenos=true, linenostart=10}
-func main() {
+`+"``` go\n"+`func main() {
     fmt.Println("ok")
 }
 `+"```"+`
 `), &buffer); err != nil {
 		t.Fatal(err)
 	}
+
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
 <h1>Title</h1>
-<div class="highlight"><pre class="chroma"><code class="language-go hljs" data-lang="go"><span class="ln">10</span><span class="kd">func</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
-<span class="ln">11</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
-<span class="ln">12</span><span class="p">}</span>
-</code></pre></div>
+<div class="highlight"><pre class="chroma"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
+<span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
+<span class="ln">3</span><span class="p">}</span>
+</pre></div>
 `) {
 		t.Error("failed to render HTML")
 	}
@@ -127,7 +135,6 @@ func main() {
 /* GenericSubheading */ .chroma .gu { color: #75715e }`) {
 		t.Error("failed to render CSS")
 	}
-
 }
 
 func TestHighlighting2(t *testing.T) {
@@ -197,7 +204,7 @@ func TestHighlightingHlLines(t *testing.T) {
 		goldmark.WithExtensions(
 			NewHighlighting(
 				WithFormatOptions(
-					chromahtml.WithClasses(),
+					chromahtml.WithClasses(true),
 				),
 			),
 		),
@@ -205,15 +212,13 @@ func TestHighlightingHlLines(t *testing.T) {
 
 	for i, test := range []struct {
 		attributes string
-		expect   []int
+		expect     []int
 	}{
 		{`hl_lines=["2"]`, []int{2}},
 		{`hl_lines=["2-3",5],linenostart=5`, []int{2, 3, 5}},
 		{`hl_lines=["2-3"]`, []int{2, 3}},
 	} {
-
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-
 			var buffer bytes.Buffer
 			codeBlock := fmt.Sprintf(`bash {%s}
 LINE1
@@ -240,5 +245,62 @@ LINE8
 			}
 		})
 	}
+}
 
+func TestHighlightingLinenos(t *testing.T) {
+	outputLineNumbersInTable := `<div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<span class="lnt">1
+</span></td>
+<td class="lntd">
+LINE1
+</td></tr></table>
+</div>`
+
+	for i, test := range []struct {
+		attributes         string
+		lineNumbers        bool
+		lineNumbersInTable bool
+		expect             string
+	}{
+		{`linenos=true`, false, false, `<span class="ln">1</span>LINE1`},
+		{`linenos=false`, false, false, `LINE1`},
+		{``, true, false, `<span class="ln">1</span>LINE1`},
+		{``, true, true, outputLineNumbersInTable},
+		{`linenos=inline`, true, true, `<span class="ln">1</span>LINE1`},
+		{`linenos=foo`, false, false, `<span class="ln">1</span>LINE1`},
+		{`linenos=table`, false, false, outputLineNumbersInTable},
+	} {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			markdown := goldmark.New(
+				goldmark.WithExtensions(
+					NewHighlighting(
+						WithFormatOptions(
+							chromahtml.WithLineNumbers(test.lineNumbers),
+							chromahtml.LineNumbersInTable(test.lineNumbersInTable),
+							chromahtml.PreventSurroundingPre(true),
+							chromahtml.WithClasses(true),
+						),
+					),
+				),
+			)
+
+			var buffer bytes.Buffer
+			codeBlock := fmt.Sprintf(`bash {%s}
+LINE1
+`, test.attributes)
+
+			content := "```" + codeBlock + "```"
+
+			if err := markdown.Convert([]byte(content), &buffer); err != nil {
+				t.Fatal(err)
+			}
+
+			s := strings.TrimSpace(buffer.String())
+
+			if s != test.expect {
+				t.Fatal("got\n", s, "\nexpected\n", test.expect)
+			}
+		})
+	}
 }
