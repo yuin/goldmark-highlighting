@@ -304,3 +304,29 @@ LINE1
 		})
 	}
 }
+
+func TestHighlightingGuessLanguage(t *testing.T) {
+	markdown := goldmark.New(
+		goldmark.WithExtensions(
+			NewHighlighting(
+				WithGuessLanguage(true),
+				WithFormatOptions(
+					chromahtml.WithClasses(true),
+					chromahtml.WithLineNumbers(true),
+				),
+			),
+		),
+	)
+	var buffer bytes.Buffer
+	if err := markdown.Convert([]byte("```"+`
+LINE	
+`+"```"), &buffer); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+<pre class="chroma"><span class="ln">1</span>LINE	
+</pre>
+`) {
+		t.Errorf("render mismatch, got\n%s", buffer.String())
+	}
+}
