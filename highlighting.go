@@ -112,6 +112,12 @@ type Config struct {
 	// Supported styles are defined under https://github.com/alecthomas/chroma/tree/master/formatters.
 	Style string
 
+	// If set, will try to guess language if none provided.
+	// If the guessing fails, we will fall back to a text lexer.
+	// Note that while Chroma's API supports language guessing, the implementation
+	// is not there yet, so you will currently always get the basic text lexer.
+	GuessLanguage bool
+
 	// FormatOptions is a option related to output formats.
 	// See https://github.com/alecthomas/chroma#the-html-formatter for details.
 	FormatOptions []chromahtml.Option
@@ -154,6 +160,8 @@ func (c *Config) SetOption(name renderer.OptionName, value interface{}) {
 		c.WrapperRenderer = value.(WrapperRenderer)
 	case optCodeBlockOptions:
 		c.CodeBlockOptions = value.(CodeBlockOptions)
+	case optGuessLanguage:
+		c.GuessLanguage = value.(bool)
 	default:
 		c.Config.SetOption(name, value)
 	}
@@ -236,6 +244,26 @@ func (o *withCSSWriter) SetHighlightingOption(c *Config) {
 // WithCSSWriter is a functional option that sets io.Writer for CSS data.
 func WithCSSWriter(w io.Writer) Option {
 	return &withCSSWriter{w}
+}
+
+const optGuessLanguage renderer.OptionName = "HighlightingGuessLanguage"
+
+type withGuessLanguage struct {
+	value bool
+}
+
+func (o *withGuessLanguage) SetConfig(c *renderer.Config) {
+	c.Options[optGuessLanguage] = o.value
+}
+
+func (o *withGuessLanguage) SetHighlightingOption(c *Config) {
+	c.GuessLanguage = o.value
+}
+
+// WithGuessLanguage is a functional option that toggles language guessing
+// if none provided.
+func WithGuessLanguage(b bool) Option {
+	return &withGuessLanguage{value: b}
 }
 
 const optWrapperRenderer renderer.OptionName = "HighlightingWrapperRenderer"
@@ -426,7 +454,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	if language != nil {
 		lexer = lexers.Get(string(language))
 	}
-	if !nohl && lexer != nil {
+	if !nohl && (lexer != nil || r.GuessLanguage) {
 		if style == nil {
 			style = styles.Fallback
 		}
@@ -436,6 +464,15 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 			line := n.Lines().At(i)
 			buffer.Write(line.Value(source))
 		}
+
+		if lexer == nil {
+			lexer = lexers.Analyse(buffer.String())
+			if lexer == nil {
+				lexer = lexers.Fallback
+			}
+			language = []byte(strings.ToLower(lexer.Config().Name))
+		}
+
 		iterator, err := lexer.Tokenise(nil, buffer.String())
 		if err == nil {
 			c := newCodeBlockContext(language, true, attrs)
