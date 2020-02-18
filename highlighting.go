@@ -472,6 +472,7 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 			}
 			language = []byte(strings.ToLower(lexer.Config().Name))
 		}
+		lexer = chroma.Coalesce(lexer)
 
 		iterator, err := lexer.Tokenise(nil, buffer.String())
 		if err == nil {
