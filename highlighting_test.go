@@ -74,7 +74,11 @@ Title
 		t.Error("failed to render HTML")
 	}
 
+	println(css.String())
+
 	if strings.TrimSpace(css.String()) != strings.TrimSpace(`/* Background */ .chroma { color: #f8f8f2; background-color: #272822 }
+/* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #f8f8f2; background-color: #3c3d38 }
+/* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #f8f8f2; background-color: #3c3d38 }
 /* Error */ .chroma .err { color: #960050; background-color: #1e0010 }
 /* LineTableTD */ .chroma .lntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
 /* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; width: auto; overflow: auto; display: block; }
