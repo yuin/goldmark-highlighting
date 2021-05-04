@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma"
 	chromahtml "github.com/alecthomas/chroma/formatters/html"
+	"github.com/google/go-cmp/cmp"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/util"
 )
@@ -74,9 +76,7 @@ Title
 		t.Error("failed to render HTML")
 	}
 
-	println(css.String())
-
-	if strings.TrimSpace(css.String()) != strings.TrimSpace(`/* Background */ .chroma { color: #f8f8f2; background-color: #272822 }
+	expected := strings.TrimSpace(`/* Background */ .chroma { color: #f8f8f2; background-color: #272822 }
 /* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #f8f8f2; background-color: #3c3d38 }
 /* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #f8f8f2; background-color: #3c3d38 }
 /* Error */ .chroma .err { color: #960050; background-color: #1e0010 }
@@ -136,8 +136,12 @@ Title
 /* GenericEmph */ .chroma .ge { font-style: italic }
 /* GenericInserted */ .chroma .gi { color: #a6e22e }
 /* GenericStrong */ .chroma .gs { font-weight: bold }
-/* GenericSubheading */ .chroma .gu { color: #75715e }`) {
-		t.Error("failed to render CSS")
+/* GenericSubheading */ .chroma .gu { color: #75715e }`)
+
+	gotten := strings.TrimSpace(css.String())
+
+	if diff := cmp.Diff(expected, gotten); diff != "" {
+		t.Errorf("failed to render CSS.\n%s", diff)
 	}
 }
 
@@ -200,6 +204,172 @@ int main() {
 </pre>
 `) {
 		t.Error("failed to render HTML")
+	}
+}
+
+func TestHighlightingCustom(t *testing.T) {
+	custom := chroma.MustNewStyle("custom", chroma.StyleEntries{
+		chroma.Background:           "#cccccc bg:#1d1d1d",
+		chroma.Comment:              "#999999",
+		chroma.CommentSpecial:       "#cd0000",
+		chroma.Keyword:              "#cc99cd",
+		chroma.KeywordDeclaration:   "#cc99cd",
+		chroma.KeywordNamespace:     "#cc99cd",
+		chroma.KeywordType:          "#cc99cd",
+		chroma.Operator:             "#67cdcc",
+		chroma.OperatorWord:         "#cdcd00",
+		chroma.NameClass:            "#f08d49",
+		chroma.NameBuiltin:          "#f08d49",
+		chroma.NameFunction:         "#f08d49",
+		chroma.NameException:        "bold #666699",
+		chroma.NameVariable:         "#00cdcd",
+		chroma.LiteralString:        "#7ec699",
+		chroma.LiteralNumber:        "#f08d49",
+		chroma.LiteralStringBoolean: "#f08d49",
+		chroma.GenericHeading:       "bold #000080",
+		chroma.GenericSubheading:    "bold #800080",
+		chroma.GenericDeleted:       "#e2777a",
+		chroma.GenericInserted:      "#cc99cd",
+		chroma.GenericError:         "#e2777a",
+		chroma.GenericEmph:          "italic",
+		chroma.GenericStrong:        "bold",
+		chroma.GenericPrompt:        "bold #000080",
+		chroma.GenericOutput:        "#888",
+		chroma.GenericTraceback:     "#04D",
+		chroma.GenericUnderline:     "underline",
+		chroma.Error:                "border:#e2777a",
+	})
+
+	var css bytes.Buffer
+	markdown := goldmark.New(
+		goldmark.WithExtensions(
+			NewHighlighting(
+				WithStyle("monokai"), // to make sure it is overrided even if present
+				WithCustomStyle(custom),
+				WithCSSWriter(&css),
+				WithFormatOptions(
+					chromahtml.WithClasses(true),
+					chromahtml.WithLineNumbers(false),
+				),
+				WithWrapperRenderer(func(w util.BufWriter, c CodeBlockContext, entering bool) {
+					_, ok := c.Language()
+					if entering {
+						if !ok {
+							w.WriteString("<pre><code>")
+							return
+						}
+						w.WriteString(`<div class="highlight">`)
+					} else {
+						if !ok {
+							w.WriteString("</pre></code>")
+							return
+						}
+						w.WriteString(`</div>`)
+					}
+				}),
+				WithCodeBlockOptions(func(c CodeBlockContext) []chromahtml.Option {
+					if language, ok := c.Language(); ok {
+						// Turn on line numbers for Go only.
+						if string(language) == "go" {
+							return []chromahtml.Option{
+								chromahtml.WithLineNumbers(true),
+							}
+						}
+					}
+					return nil
+				}),
+			),
+		),
+	)
+	var buffer bytes.Buffer
+	if err := markdown.Convert([]byte(`
+Title
+=======
+`+"``` go\n"+`func main() {
+    fmt.Println("ok")
+}
+`+"```"+`
+`), &buffer); err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+<h1>Title</h1>
+<div class="highlight"><pre class="chroma"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
+<span class="ln">3</span><span class="p">}</span>
+</pre></div>
+`) {
+		t.Error("failed to render HTML")
+	}
+
+	expected := strings.TrimSpace(`/* Background */ .chroma { color: #cccccc; background-color: #1d1d1d }
+/* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #cccccc; background-color: #333333 }
+/* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #cccccc; background-color: #333333 }
+/* Error */ .chroma .err {  }
+/* LineTableTD */ .chroma .lntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
+/* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; width: auto; overflow: auto; display: block; }
+/* LineHighlight */ .chroma .hl { display: block; width: 100%;background-color: #333333 }
+/* LineNumbersTable */ .chroma .lnt { margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
+/* LineNumbers */ .chroma .ln { margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
+/* Keyword */ .chroma .k { color: #cc99cd }
+/* KeywordConstant */ .chroma .kc { color: #cc99cd }
+/* KeywordDeclaration */ .chroma .kd { color: #cc99cd }
+/* KeywordNamespace */ .chroma .kn { color: #cc99cd }
+/* KeywordPseudo */ .chroma .kp { color: #cc99cd }
+/* KeywordReserved */ .chroma .kr { color: #cc99cd }
+/* KeywordType */ .chroma .kt { color: #cc99cd }
+/* NameBuiltin */ .chroma .nb { color: #f08d49 }
+/* NameClass */ .chroma .nc { color: #f08d49 }
+/* NameException */ .chroma .ne { color: #666699; font-weight: bold }
+/* NameFunction */ .chroma .nf { color: #f08d49 }
+/* NameVariable */ .chroma .nv { color: #00cdcd }
+/* LiteralString */ .chroma .s { color: #7ec699 }
+/* LiteralStringAffix */ .chroma .sa { color: #7ec699 }
+/* LiteralStringBacktick */ .chroma .sb { color: #7ec699 }
+/* LiteralStringChar */ .chroma .sc { color: #7ec699 }
+/* LiteralStringDelimiter */ .chroma .dl { color: #7ec699 }
+/* LiteralStringDoc */ .chroma .sd { color: #7ec699 }
+/* LiteralStringDouble */ .chroma .s2 { color: #7ec699 }
+/* LiteralStringEscape */ .chroma .se { color: #7ec699 }
+/* LiteralStringHeredoc */ .chroma .sh { color: #7ec699 }
+/* LiteralStringInterpol */ .chroma .si { color: #7ec699 }
+/* LiteralStringOther */ .chroma .sx { color: #7ec699 }
+/* LiteralStringRegex */ .chroma .sr { color: #7ec699 }
+/* LiteralStringSingle */ .chroma .s1 { color: #7ec699 }
+/* LiteralStringSymbol */ .chroma .ss { color: #7ec699 }
+/* LiteralNumber */ .chroma .m { color: #f08d49 }
+/* LiteralNumberBin */ .chroma .mb { color: #f08d49 }
+/* LiteralNumberFloat */ .chroma .mf { color: #f08d49 }
+/* LiteralNumberHex */ .chroma .mh { color: #f08d49 }
+/* LiteralNumberInteger */ .chroma .mi { color: #f08d49 }
+/* LiteralNumberIntegerLong */ .chroma .il { color: #f08d49 }
+/* LiteralNumberOct */ .chroma .mo { color: #f08d49 }
+/* Operator */ .chroma .o { color: #67cdcc }
+/* OperatorWord */ .chroma .ow { color: #cdcd00 }
+/* Comment */ .chroma .c { color: #999999 }
+/* CommentHashbang */ .chroma .ch { color: #999999 }
+/* CommentMultiline */ .chroma .cm { color: #999999 }
+/* CommentSingle */ .chroma .c1 { color: #999999 }
+/* CommentSpecial */ .chroma .cs { color: #cd0000 }
+/* CommentPreproc */ .chroma .cp { color: #999999 }
+/* CommentPreprocFile */ .chroma .cpf { color: #999999 }
+/* GenericDeleted */ .chroma .gd { color: #e2777a }
+/* GenericEmph */ .chroma .ge { font-style: italic }
+/* GenericError */ .chroma .gr { color: #e2777a }
+/* GenericHeading */ .chroma .gh { color: #000080; font-weight: bold }
+/* GenericInserted */ .chroma .gi { color: #cc99cd }
+/* GenericOutput */ .chroma .go { color: #888888 }
+/* GenericPrompt */ .chroma .gp { color: #000080; font-weight: bold }
+/* GenericStrong */ .chroma .gs { font-weight: bold }
+/* GenericSubheading */ .chroma .gu { color: #800080; font-weight: bold }
+/* GenericTraceback */ .chroma .gt { color: #0044dd }
+/* GenericUnderline */ .chroma .gl { text-decoration: underline }`)
+
+	gotten := strings.TrimSpace(css.String())
+
+	if diff := cmp.Diff(expected, gotten); diff != "" {
+		t.Errorf("failed to render CSS.\n%s", diff)
 	}
 }
 
