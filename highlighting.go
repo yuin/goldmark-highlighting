@@ -339,7 +339,7 @@ func (o *withFormatOptions) SetConfig(c *renderer.Config) {
 	if _, ok := c.Options[optFormatOptions]; !ok {
 		c.Options[optFormatOptions] = []chromahtml.Option{}
 	}
-	c.Options[optStyle] = append(c.Options[optFormatOptions].([]chromahtml.Option), o.value...)
+	c.Options[optFormatOptions] = append(c.Options[optFormatOptions].([]chromahtml.Option), o.value...)
 }
 
 func (o *withFormatOptions) SetHighlightingOption(c *Config) {
