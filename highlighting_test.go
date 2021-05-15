@@ -8,8 +8,8 @@ import (
 
 	"github.com/alecthomas/chroma"
 	chromahtml "github.com/alecthomas/chroma/formatters/html"
-	"github.com/google/go-cmp/cmp"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/testutil"
 	"github.com/yuin/goldmark/util"
 )
 
@@ -140,8 +140,9 @@ Title
 
 	gotten := strings.TrimSpace(css.String())
 
-	if diff := cmp.Diff(expected, gotten); diff != "" {
-		t.Errorf("failed to render CSS.\n%s", diff)
+	if expected != gotten {
+		diff := testutil.DiffPretty([]byte(expected), []byte(gotten))
+		t.Errorf("incorrect CSS.\n%s", string(diff))
 	}
 }
 
@@ -368,8 +369,9 @@ Title
 
 	gotten := strings.TrimSpace(css.String())
 
-	if diff := cmp.Diff(expected, gotten); diff != "" {
-		t.Errorf("failed to render CSS.\n%s", diff)
+	if expected != gotten {
+		diff := testutil.DiffPretty([]byte(expected), []byte(gotten))
+		t.Errorf("incorrect CSS.\n%s", string(diff))
 	}
 }
 
