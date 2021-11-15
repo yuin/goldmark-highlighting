@@ -66,7 +66,7 @@ Title
 		t.Fatal(err)
 	}
 
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	if strings.TrimSpace(strings.Replace(buffer.String(), `<pre tabindex="0"`, `<pre`, 1)) != strings.TrimSpace(`
 <h1>Title</h1>
 <div class="highlight"><pre class="chroma"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 <span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
@@ -196,7 +196,7 @@ int main() {
 `), &buffer); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	if strings.TrimSpace(strings.Replace(buffer.String(), `<pre tabindex="0"`, `<pre`, 1)) != strings.TrimSpace(`
 <h1>Title</h1>
 <pre style="background-color:#fff"><span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#999;font-weight:bold;font-style:italic">#include</span> <span style="color:#999;font-weight:bold;font-style:italic">&lt;iostream&gt;</span><span style="color:#999;font-weight:bold;font-style:italic">
 </span></span><span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#999;font-weight:bold;font-style:italic"></span><span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">main</span>() {
@@ -294,7 +294,7 @@ Title
 		t.Fatal(err)
 	}
 
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	if strings.TrimSpace(strings.Replace(buffer.String(), `<pre tabindex="0"`, `<pre`, 1)) != strings.TrimSpace(`
 <h1>Title</h1>
 <div class="highlight"><pre class="chroma"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
 <span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
@@ -499,7 +499,7 @@ LINE
 `+"```"), &buffer); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	if strings.TrimSpace(strings.Replace(buffer.String(), `<pre tabindex="0"`, `<pre`, 1)) != strings.TrimSpace(`
 <pre class="chroma"><span class="ln">1</span>LINE	
 </pre>
 `) {
@@ -531,7 +531,7 @@ User-Agent: foo
 `+"```"), &buffer); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	if strings.TrimSpace(strings.Replace(buffer.String(), `<pre tabindex="0"`, `<pre`, 1)) != strings.TrimSpace(`
 <pre class="chroma"><span class="ln">1</span><span class="nf">GET</span> <span class="nn">/foo</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
 <span class="ln">2</span><span class="n">Content-Type</span><span class="o">:</span> <span class="l">application/json</span>
 <span class="ln">3</span><span class="n">User-Agent</span><span class="o">:</span> <span class="l">foo</span>
