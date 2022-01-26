@@ -68,23 +68,25 @@ Title
 
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
 <h1>Title</h1>
-<div class="highlight"><pre class="chroma"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-<span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
-<span class="ln">3</span><span class="p">}</span>
-</pre></div>
+<div class="highlight"><pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="ln">2</span><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div>
 `) {
-		t.Error("failed to render HTML")
+		t.Error("failed to render HTML\n")
 	}
 
-	expected := strings.TrimSpace(`/* Background */ .chroma { color: #f8f8f2; background-color: #272822 }
+	expected := strings.TrimSpace(`/* Background */ .bg { color: #f8f8f2; background-color: #272822 }
+/* PreWrapper */ .chroma { color: #f8f8f2; background-color: #272822; }
 /* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #f8f8f2; background-color: #3c3d38 }
 /* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #f8f8f2; background-color: #3c3d38 }
 /* Error */ .chroma .err { color: #960050; background-color: #1e0010 }
 /* LineTableTD */ .chroma .lntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
-/* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; width: auto; overflow: auto; display: block; }
-/* LineHighlight */ .chroma .hl { display: block; width: 100%;background-color: #3c3d38 }
-/* LineNumbersTable */ .chroma .lnt { margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
-/* LineNumbers */ .chroma .ln { margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
+/* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; }
+/* LineHighlight */ .chroma .hl { background-color: #3c3d38 }
+/* LineNumbersTable */ .chroma .lnt { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
+/* LineNumbers */ .chroma .ln { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
+/* Line */ .chroma .line { display: flex; }
 /* Keyword */ .chroma .k { color: #66d9ef }
 /* KeywordConstant */ .chroma .kc { color: #66d9ef }
 /* KeywordDeclaration */ .chroma .kd { color: #66d9ef }
@@ -198,11 +200,11 @@ int main() {
 	}
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
 <h1>Title</h1>
-<pre style="background-color:#fff"><span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#999;font-weight:bold;font-style:italic">#include</span> <span style="color:#999;font-weight:bold;font-style:italic">&lt;iostream&gt;</span><span style="color:#999;font-weight:bold;font-style:italic">
-</span></span><span style="display:block;width:100%;background-color:#e5e5e5"><span style="color:#999;font-weight:bold;font-style:italic"></span><span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">main</span>() {
-</span>    std<span style="color:#000;font-weight:bold">::</span>cout<span style="color:#000;font-weight:bold">&lt;&lt;</span> <span style="color:#d14">&#34;hello&#34;</span> <span style="color:#000;font-weight:bold">&lt;&lt;</span> std<span style="color:#000;font-weight:bold">::</span>endl;
-}
-</pre>
+<pre tabindex="0" style="background-color:#fff;display:grid;"><code><span style="display:flex; background-color:#e5e5e5"><span><span style="color:#999;font-weight:bold;font-style:italic">#include</span> <span style="color:#999;font-weight:bold;font-style:italic">&lt;iostream&gt;</span><span style="color:#999;font-weight:bold;font-style:italic">
+</span></span></span><span style="display:flex; background-color:#e5e5e5"><span><span style="color:#999;font-weight:bold;font-style:italic"></span><span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">main</span>() {
+</span></span><span style="display:flex;"><span>    std<span style="color:#000;font-weight:bold">::</span>cout<span style="color:#000;font-weight:bold">&lt;&lt;</span> <span style="color:#d14">&#34;hello&#34;</span> <span style="color:#000;font-weight:bold">&lt;&lt;</span> std<span style="color:#000;font-weight:bold">::</span>endl;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre>
 `) {
 		t.Error("failed to render HTML")
 	}
@@ -296,23 +298,25 @@ Title
 
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
 <h1>Title</h1>
-<div class="highlight"><pre class="chroma"><span class="ln">1</span><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-<span class="ln">2</span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
-<span class="ln">3</span><span class="p">}</span>
-</pre></div>
+<div class="highlight"><pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="ln">2</span><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div>
 `) {
-		t.Error("failed to render HTML")
+		t.Error("failed to render HTML", buffer.String())
 	}
 
-	expected := strings.TrimSpace(`/* Background */ .chroma { color: #cccccc; background-color: #1d1d1d }
+	expected := strings.TrimSpace(`/* Background */ .bg { color: #cccccc; background-color: #1d1d1d }
+/* PreWrapper */ .chroma { color: #cccccc; background-color: #1d1d1d; }
 /* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #cccccc; background-color: #333333 }
 /* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #cccccc; background-color: #333333 }
 /* Error */ .chroma .err {  }
 /* LineTableTD */ .chroma .lntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
-/* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; width: auto; overflow: auto; display: block; }
-/* LineHighlight */ .chroma .hl { display: block; width: 100%;background-color: #333333 }
-/* LineNumbersTable */ .chroma .lnt { margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
-/* LineNumbers */ .chroma .ln { margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
+/* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; }
+/* LineHighlight */ .chroma .hl { background-color: #333333 }
+/* LineNumbersTable */ .chroma .lnt { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
+/* LineNumbers */ .chroma .ln { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
+/* Line */ .chroma .line { display: flex; }
 /* Keyword */ .chroma .k { color: #cc99cd }
 /* KeywordConstant */ .chroma .kc { color: #cc99cd }
 /* KeywordDeclaration */ .chroma .kd { color: #cc99cd }
@@ -414,7 +418,7 @@ LINE8
 			}
 
 			for _, line := range test.expect {
-				expectStr := fmt.Sprintf("<span class=\"hl\">LINE%d\n</span>", line)
+				expectStr := fmt.Sprintf("<span class=\"line hl\"><span class=\"cl\">LINE%d\n</span></span>", line)
 				if !strings.Contains(buffer.String(), expectStr) {
 					t.Fatal("got\n", buffer.String(), "\nexpected\n", expectStr)
 				}
@@ -429,8 +433,8 @@ func TestHighlightingLinenos(t *testing.T) {
 <span class="lnt">1
 </span></td>
 <td class="lntd">
-LINE1
-</td></tr></table>
+<span class="line"><span class="cl">LINE1
+</span></span></td></tr></table>
 </div>`
 
 	for i, test := range []struct {
@@ -439,12 +443,17 @@ LINE1
 		lineNumbersInTable bool
 		expect             string
 	}{
-		{`linenos=true`, false, false, `<span class="ln">1</span>LINE1`},
-		{`linenos=false`, false, false, `LINE1`},
-		{``, true, false, `<span class="ln">1</span>LINE1`},
+		{`linenos=true`, false, false, `<span class="line"><span class="ln">1</span><span class="cl">LINE1
+</span></span>`},
+		{`linenos=false`, false, false, `<span class="line"><span class="cl">LINE1
+</span></span>`},
+		{``, true, false, `<span class="line"><span class="ln">1</span><span class="cl">LINE1
+</span></span>`},
 		{``, true, true, outputLineNumbersInTable},
-		{`linenos=inline`, true, true, `<span class="ln">1</span>LINE1`},
-		{`linenos=foo`, false, false, `<span class="ln">1</span>LINE1`},
+		{`linenos=inline`, true, true, `<span class="line"><span class="ln">1</span><span class="cl">LINE1
+</span></span>`},
+		{`linenos=foo`, false, false, `<span class="line"><span class="ln">1</span><span class="cl">LINE1
+</span></span>`},
 		{`linenos=table`, false, false, outputLineNumbersInTable},
 	} {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
@@ -500,8 +509,8 @@ LINE
 		t.Fatal(err)
 	}
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
-<pre class="chroma"><span class="ln">1</span>LINE	
-</pre>
+<pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl">LINE	
+</span></span></code></pre>
 `) {
 		t.Errorf("render mismatch, got\n%s", buffer.String())
 	}
@@ -532,14 +541,14 @@ User-Agent: foo
 		t.Fatal(err)
 	}
 	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
-<pre class="chroma"><span class="ln">1</span><span class="nf">GET</span> <span class="nn">/foo</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
-<span class="ln">2</span><span class="n">Content-Type</span><span class="o">:</span> <span class="l">application/json</span>
-<span class="ln">3</span><span class="n">User-Agent</span><span class="o">:</span> <span class="l">foo</span>
-<span class="ln">4</span>
-<span class="ln">5</span><span class="p">{</span>
-<span class="ln">6</span>  <span class="nt">&#34;hello&#34;</span><span class="p">:</span> <span class="s2">&#34;world&#34;</span>
-<span class="ln">7</span><span class="p">}</span>
-</pre>
+<pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="nf">GET</span> <span class="nn">/foo</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+</span></span><span class="line"><span class="ln">2</span><span class="cl"><span class="n">Content-Type</span><span class="o">:</span> <span class="l">application/json</span>
+</span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="n">User-Agent</span><span class="o">:</span> <span class="l">foo</span>
+</span></span><span class="line"><span class="ln">4</span><span class="cl">
+</span></span><span class="line"><span class="ln">5</span><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="ln">6</span><span class="cl">  <span class="nt">&#34;hello&#34;</span><span class="p">:</span> <span class="s2">&#34;world&#34;</span>
+</span></span><span class="line"><span class="ln">7</span><span class="cl"><span class="p">}</span>
+</span></span></code></pre>
 `) {
 		t.Errorf("render mismatch, got\n%s", buffer.String())
 	}
