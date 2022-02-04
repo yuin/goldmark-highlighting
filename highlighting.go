@@ -390,7 +390,7 @@ func getAttributes(node *ast.FencedCodeBlock, infostr []byte) ImmutableAttribute
 			attrStr := infostr[attrStartIdx:]
 			if attrs, hasAttr := parser.ParseAttributes(text.NewReader(attrStr)); hasAttr {
 				for _, attr := range attrs {
-					n.SetAttribute(attr.Name, attr.Value)
+					n.SetAttribute(bytes.ToLower(attr.Name), attr.Value)
 				}
 				return &immutableAttributes{n}
 			}

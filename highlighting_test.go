@@ -393,6 +393,7 @@ func TestHighlightingHlLines(t *testing.T) {
 		{`hl_lines=["2"]`, []int{2}},
 		{`hl_lines=["2-3",5],linenostart=5`, []int{2, 3, 5}},
 		{`hl_lines=["2-3"]`, []int{2, 3}},
+		{`HL_LiNes=["2-3"]`, []int{2, 3}},
 	} {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			var buffer bytes.Buffer
@@ -446,6 +447,7 @@ LINE1
 		{`linenos=inline`, true, true, `<span class="ln">1</span>LINE1`},
 		{`linenos=foo`, false, false, `<span class="ln">1</span>LINE1`},
 		{`linenos=table`, false, false, outputLineNumbersInTable},
+		{`LineNos=table`, false, false, outputLineNumbersInTable},
 	} {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			markdown := goldmark.New(
