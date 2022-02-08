@@ -423,8 +423,10 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 	if attrs != nil {
 		baseLineNumber := 1
 		if linenostartAttr, ok := attrs.Get(linenostartAttrName); ok {
-			baseLineNumber = int(linenostartAttr.(float64))
-			chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.BaseLineNumber(baseLineNumber))
+			if linenostart, ok := linenostartAttr.(float64); ok {
+				baseLineNumber = int(linenostart)
+				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.BaseLineNumber(baseLineNumber))
+			}
 		}
 		if linesAttr, hasLinesAttr := attrs.Get(highlightLinesAttrName); hasLinesAttr {
 			if lines, ok := linesAttr.([]interface{}); ok {
@@ -453,8 +455,10 @@ func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, no
 			}
 		}
 		if styleAttr, hasStyleAttr := attrs.Get(styleAttrName); hasStyleAttr {
-			styleStr := string([]byte(styleAttr.([]uint8)))
-			style = styles.Get(styleStr)
+			if st, ok := styleAttr.([]uint8); ok {
+				styleStr := string([]byte(st))
+				style = styles.Get(styleStr)
+			}
 		}
 		if _, hasNohlAttr := attrs.Get(nohlAttrName); hasNohlAttr {
 			nohl = true

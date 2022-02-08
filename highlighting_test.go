@@ -397,6 +397,7 @@ func TestHighlightingHlLines(t *testing.T) {
 		{`hl_lines=["2"]`, []int{2}},
 		{`hl_lines=["2-3",5],linenostart=5`, []int{2, 3, 5}},
 		{`hl_lines=["2-3"]`, []int{2, 3}},
+		{`hl_lines=["2-3",5],linenostart="5"`, []int{2, 3}}, // linenostart must be a number. string values are ignored
 	} {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			var buffer bytes.Buffer
