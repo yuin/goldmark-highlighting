@@ -428,6 +428,14 @@ LINE8
 	}
 }
 
+type nopPreWrapper struct{}
+
+// Start is called to write a start <pre> element.
+func (nopPreWrapper) Start(code bool, styleAttr string) string { return "" }
+
+// End is called to write the end </pre> element.
+func (nopPreWrapper) End(code bool) string { return "" }
+
 func TestHighlightingLinenos(t *testing.T) {
 	outputLineNumbersInTable := `<div class="chroma">
 <table class="lntable"><tr><td class="lntd">
@@ -464,7 +472,7 @@ func TestHighlightingLinenos(t *testing.T) {
 						WithFormatOptions(
 							chromahtml.WithLineNumbers(test.lineNumbers),
 							chromahtml.LineNumbersInTable(test.lineNumbersInTable),
-							chromahtml.PreventSurroundingPre(true),
+							chromahtml.WithPreWrapper(nopPreWrapper{}),
 							chromahtml.WithClasses(true),
 						),
 					),
