@@ -11,7 +11,7 @@ Installation
 --------------------
 
 ```
-go get github.com/yuin/goldmark-highlighting
+go get github.com/yuin/goldmark-highlighting/v2
 ```
 
 Usage
@@ -25,7 +25,7 @@ import (
     "github.com/yuin/goldmark"
     "github.com/yuin/goldmark/extension"
     "github.com/yuin/goldmark/parser"
-    "github.com/yuin/goldmark-highlighting"
+    "github.com/yuin/goldmark-highlighting/v2"
 
 )
 
