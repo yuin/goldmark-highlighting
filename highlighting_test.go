@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alecthomas/chroma"
-	chromahtml "github.com/alecthomas/chroma/formatters/html"
+	"github.com/alecthomas/chroma/v2"
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/testutil"
 	"github.com/yuin/goldmark/util"
@@ -76,7 +76,7 @@ Title
 		t.Error("failed to render HTML\n")
 	}
 
-	expected := strings.TrimSpace(`/* Background */ .bg { color: #f8f8f2; background-color: #272822 }
+	expected := strings.TrimSpace(`/* Background */ .bg { color: #f8f8f2; background-color: #272822; }
 /* PreWrapper */ .chroma { color: #f8f8f2; background-color: #272822; }
 /* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #f8f8f2; background-color: #3c3d38 }
 /* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #f8f8f2; background-color: #3c3d38 }
@@ -306,7 +306,7 @@ Title
 		t.Error("failed to render HTML", buffer.String())
 	}
 
-	expected := strings.TrimSpace(`/* Background */ .bg { color: #cccccc; background-color: #1d1d1d }
+	expected := strings.TrimSpace(`/* Background */ .bg { color: #cccccc; background-color: #1d1d1d; }
 /* PreWrapper */ .chroma { color: #cccccc; background-color: #1d1d1d; }
 /* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #cccccc; background-color: #333333 }
 /* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #cccccc; background-color: #333333 }
@@ -428,6 +428,14 @@ LINE8
 	}
 }
 
+type nopPreWrapper struct{}
+
+// Start is called to write a start <pre> element.
+func (nopPreWrapper) Start(code bool, styleAttr string) string { return "" }
+
+// End is called to write the end </pre> element.
+func (nopPreWrapper) End(code bool) string { return "" }
+
 func TestHighlightingLinenos(t *testing.T) {
 	outputLineNumbersInTable := `<div class="chroma">
 <table class="lntable"><tr><td class="lntd">
@@ -464,7 +472,7 @@ func TestHighlightingLinenos(t *testing.T) {
 						WithFormatOptions(
 							chromahtml.WithLineNumbers(test.lineNumbers),
 							chromahtml.LineNumbersInTable(test.lineNumbersInTable),
-							chromahtml.PreventSurroundingPre(true),
+							chromahtml.WithPreWrapper(nopPreWrapper{}),
 							chromahtml.WithClasses(true),
 						),
 					),
