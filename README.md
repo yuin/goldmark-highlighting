@@ -7,6 +7,12 @@ that adds syntax-highlighting to the fenced code blocks.
 goldmark-highlighting uses [chroma](https://github.com/alecthomas/chroma) as a
 syntax highlighter.
 
+Deprecated
+--------------------
+This branch(master) uses chroma v1 as a syntax highlighter.
+
+Now goldmark-highlighting uses chroma v2 as a syntax highlighter and defaults to [v2 branch](https://github.com/yuin/goldmark-highlighting/tree/v2).
+
 Installation
 --------------------
 
