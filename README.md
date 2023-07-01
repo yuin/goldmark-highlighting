@@ -21,7 +21,7 @@ Usage
 import (
     "bytes"
     "fmt"
-    "github.com/alecthomas/chroma/formatters/html"
+    chromahtml "github.com/alecthomas/chroma/formatters/html"
     "github.com/yuin/goldmark"
     "github.com/yuin/goldmark/extension"
     "github.com/yuin/goldmark/parser"
@@ -50,7 +50,7 @@ func main() {
             highlighting.NewHighlighting(
                highlighting.WithStyle("monokai"),
                highlighting.WithFormatOptions(
-                   html.WithLineNumbers(),
+                   chromahtml.WithLineNumbers(true),
                ),
             ),
         ),
