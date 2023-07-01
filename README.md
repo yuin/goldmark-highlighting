@@ -18,43 +18,61 @@ Usage
 --------------------
 
 ```go
-import (
-    "bytes"
-    "fmt"
-    chromahtml "github.com/alecthomas/chroma/formatters/html"
-    "github.com/yuin/goldmark"
-    "github.com/yuin/goldmark/extension"
-    "github.com/yuin/goldmark/parser"
-    "github.com/yuin/goldmark-highlighting/v2"
+package main
 
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/yuin/goldmark"
+
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 )
 
 func main() {
-    markdown := goldmark.New(
-        goldmark.WithExtensions(
-            highlighting.Highlighting,
-        ),
-    )
-    var buf bytes.Buffer
-    if err := markdown.Convert([]byte(source), &buf); err != nil {
-        panic(err)
-    }
-    fmt.Print(title)
+	mdsrc := `
+		Title
+		=======
+		` + "```" + `
+		func main() {
+		    fmt.Println("ok")
+		}
+		` + "```" + `
+	`
+
+	// Simple usage
+	markdown := goldmark.New(
+		goldmark.WithExtensions(
+			highlighting.Highlighting,
+		),
+	)
+	var buf bytes.Buffer
+	if err := markdown.Convert([]byte(mdsrc), &buf); err != nil {
+		panic(err)
+	}
+	title := buf.String()
+	fmt.Print(title)
+
+	// Custom configuration
+	markdown2 := goldmark.New(
+		goldmark.WithExtensions(
+			highlighting.NewHighlighting(
+				highlighting.WithStyle("monokai"),
+				highlighting.WithFormatOptions(
+					chromahtml.WithLineNumbers(true),
+				),
+			),
+		),
+	)
+	var buf2 bytes.Buffer
+	if err := markdown2.Convert([]byte(mdsrc), &buf2); err != nil {
+		panic(err)
+	}
+	title2 := buf2.String()
+	fmt.Print(title2)
 }
-```
 
-
-```go
-    markdown := goldmark.New(
-        goldmark.WithExtensions(
-            highlighting.NewHighlighting(
-               highlighting.WithStyle("monokai"),
-               highlighting.WithFormatOptions(
-                   chromahtml.WithLineNumbers(true),
-               ),
-            ),
-        ),
-    )
 ```
 
 License
