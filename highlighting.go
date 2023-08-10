@@ -400,10 +400,10 @@ func getAttributes(node *ast.FencedCodeBlock, infostr []byte) ImmutableAttribute
 }
 
 func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-	n := node.(*ast.FencedCodeBlock)
 	if !entering {
 		return ast.WalkContinue, nil
 	}
+	n := node.(*ast.FencedCodeBlock)
 	language := n.Language(source)
 
 	chromaFormatterOptions := make([]chromahtml.Option, len(r.FormatOptions))
