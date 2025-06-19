@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alecthomas/chroma/v2"
-	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
+	"github.com/crowyy03/chroma/v2"
+	chromahtml "github.com/crowyy03/chroma/v2/formatters/html"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/testutil"
 	"github.com/yuin/goldmark/util"

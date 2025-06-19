@@ -26,7 +26,7 @@ import (
 
 	"github.com/yuin/goldmark"
 
-	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
+	chromahtml "github.com/crowyy03/chroma/v2/formatters/html"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 )
 
