@@ -10,569 +10,316 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer"
-	"github.com/yuin/goldmark/renderer/html"
-	"github.com/yuin/goldmark/text"
-	"github.com/yuin/goldmark/util"
-
-	"github.com/alecthomas/chroma/v2"
-	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
-	"github.com/alecthomas/chroma/v2/lexers"
-	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/alecthomas/chroma/v3"
+	chromahtml "github.com/alecthomas/chroma/v3/formatters/html"
+	"github.com/alecthomas/chroma/v3/lexers"
+	"github.com/alecthomas/chroma/v3/styles"
+	"github.com/yuin/goldmark/v2/ast"
+	"github.com/yuin/goldmark/v2/parser"
+	"github.com/yuin/goldmark/v2/renderer"
+	"github.com/yuin/goldmark/v2/renderer/html"
+	"github.com/yuin/goldmark/v2/text"
+	"github.com/yuin/goldmark/v2/util"
 )
 
-// ImmutableAttributes is a read-only interface for ast.Attributes.
-type ImmutableAttributes interface {
-	// Get returns (value, true) if an attribute associated with given
-	// name exists, otherwise (nil, false)
-	Get(name []byte) (interface{}, bool)
-
-	// GetString returns (value, true) if an attribute associated with given
-	// name exists, otherwise (nil, false)
-	GetString(name string) (interface{}, bool)
-
-	// All returns all attributes.
-	All() []ast.Attribute
+type codeBlockASTTransformer struct {
 }
 
-type immutableAttributes struct {
-	n ast.Node
-}
+var defaultCodeBlockASTTransformer parser.ASTTransformer = &codeBlockASTTransformer{}
 
-func (a *immutableAttributes) Get(name []byte) (interface{}, bool) {
-	return a.n.Attribute(name)
-}
-
-func (a *immutableAttributes) GetString(name string) (interface{}, bool) {
-	return a.n.AttributeString(name)
-}
-
-func (a *immutableAttributes) All() []ast.Attribute {
-	if a.n.Attributes() == nil {
-		return []ast.Attribute{}
-	}
-	return a.n.Attributes()
-}
-
-// CodeBlockContext holds contextual information of code highlighting.
-type CodeBlockContext interface {
-	// Language returns (language, true) if specified, otherwise (nil, false).
-	Language() ([]byte, bool)
-
-	// Highlighted returns true if this code block can be highlighted, otherwise false.
-	Highlighted() bool
-
-	// Attributes return attributes of the code block.
-	Attributes() ImmutableAttributes
-}
-
-type codeBlockContext struct {
-	language    []byte
-	highlighted bool
-	attributes  ImmutableAttributes
-}
-
-func newCodeBlockContext(language []byte, highlighted bool, attrs ImmutableAttributes) CodeBlockContext {
-	return &codeBlockContext{
-		language:    language,
-		highlighted: highlighted,
-		attributes:  attrs,
-	}
-}
-
-func (c *codeBlockContext) Language() ([]byte, bool) {
-	if c.language != nil {
-		return c.language, true
-	}
-	return nil, false
-}
-
-func (c *codeBlockContext) Highlighted() bool {
-	return c.highlighted
-}
-
-func (c *codeBlockContext) Attributes() ImmutableAttributes {
-	return c.attributes
-}
-
-// WrapperRenderer renders wrapper elements like div, pre, etc.
-type WrapperRenderer func(w util.BufWriter, context CodeBlockContext, entering bool)
-
-// CodeBlockOptions creates Chroma options per code block.
-type CodeBlockOptions func(ctx CodeBlockContext) []chromahtml.Option
-
-// Config struct holds options for the extension.
-type Config struct {
-	html.Config
-
-	// Style is a highlighting style.
-	// Supported styles are defined under https://github.com/alecthomas/chroma/tree/master/formatters.
-	Style string
-
-	// Pass in a custom Chroma style. If this is not nil, the Style string will be ignored
-	CustomStyle *chroma.Style
-
-	// If set, will try to guess language if none provided.
-	// If the guessing fails, we will fall back to a text lexer.
-	// Note that while Chroma's API supports language guessing, the implementation
-	// is not there yet, so you will currently always get the basic text lexer.
-	GuessLanguage bool
-
-	// FormatOptions is a option related to output formats.
-	// See https://github.com/alecthomas/chroma#the-html-formatter for details.
-	FormatOptions []chromahtml.Option
-
-	// CSSWriter is an io.Writer that will be used as CSS data output buffer.
-	// If WithClasses() is enabled, you can get CSS data corresponds to the style.
-	CSSWriter io.Writer
-
-	// CodeBlockOptions allows set Chroma options per code block.
-	CodeBlockOptions CodeBlockOptions
-
-	// WrapperRenderer allows you to change wrapper elements.
-	WrapperRenderer WrapperRenderer
-}
-
-// NewConfig returns a new Config with defaults.
-func NewConfig() Config {
-	return Config{
-		Config:           html.NewConfig(),
-		Style:            "github",
-		FormatOptions:    []chromahtml.Option{},
-		CSSWriter:        nil,
-		WrapperRenderer:  nil,
-		CodeBlockOptions: nil,
-	}
-}
-
-// SetOption implements renderer.SetOptioner.
-func (c *Config) SetOption(name renderer.OptionName, value interface{}) {
-	switch name {
-	case optStyle:
-		c.Style = value.(string)
-	case optCustomStyle:
-		c.CustomStyle = value.(*chroma.Style)
-	case optFormatOptions:
-		if value != nil {
-			c.FormatOptions = value.([]chromahtml.Option)
+func (a *codeBlockASTTransformer) Transform(n *ast.Document, reader text.Reader, pc parser.Context) {
+	_ = ast.Walk(n, func(n ast.Node, entering bool) (s ast.WalkStatus, err error) {
+		s = ast.WalkStatus(ast.WalkContinue)
+		if entering {
+			if codeblock, ok := n.(*ast.CodeBlock); ok && codeblock.CodeBlockKind == ast.CodeBlockKindFenced {
+				info := util.StringToReadOnlyBytes(codeblock.Info.Value(reader.Source()))
+				for i := 0; i < len(info); i++ {
+					if info[i] == '\\' && i+1 < len(info) && util.IsPunct(info[i+1]) {
+						i++
+						continue
+					}
+					if info[i] == '{' {
+						attreader := text.NewReader(info[i:], reader.Decoder())
+						attributes, ok := parser.ParseAttributes(attreader)
+						if ok {
+							for _, attr := range attributes {
+								codeblock.SetAttribute(attr.Name,
+									text.NewMultiLineValueFromString(attr.Value.Str(info[i:]), reader.Decoder()))
+							}
+						}
+					}
+				}
+			}
 		}
-	case optCSSWriter:
-		c.CSSWriter = value.(io.Writer)
-	case optWrapperRenderer:
-		c.WrapperRenderer = value.(WrapperRenderer)
-	case optCodeBlockOptions:
-		c.CodeBlockOptions = value.(CodeBlockOptions)
-	case optGuessLanguage:
-		c.GuessLanguage = value.(bool)
-	default:
-		c.Config.SetOption(name, value)
+		return
+	})
+}
+
+type parserExtension struct {
+}
+
+// NewParser returns a new [parser.Extension] for highlighted fenced code blocks.
+func NewParser() parser.Extension {
+	return &parserExtension{}
+}
+
+func (e *parserExtension) ParserOptions(_ *parser.Config) []parser.Option {
+	return []parser.Option{
+		parser.WithASTTransformers(
+			util.Prioritized(defaultCodeBlockASTTransformer, 200),
+		),
 	}
 }
 
-// Option interface is a functional option interface for the extension.
-type Option interface {
-	renderer.Option
-	// SetHighlightingOption sets given option to the extension.
-	SetHighlightingOption(*Config)
+// Parser is a default [parser.Extension] for highlighted fenced code blocks.
+var Parser = NewParser()
+
+type htmlRendererConfig struct {
+	style string
+
+	customStyle *chroma.Style
+
+	guessLanguage bool
+
+	formatterOptions []chromahtml.Option
+
+	codeBlockFormatterOptions func(n *ast.CodeBlock, source []byte, rc renderer.Context) []chromahtml.Option
 }
 
-type withHTMLOptions struct {
-	value []html.Option
-}
-
-func (o *withHTMLOptions) SetConfig(c *renderer.Config) {
-	if o.value != nil {
-		for _, v := range o.value {
-			v.(renderer.Option).SetConfig(c)
-		}
-	}
-}
-
-func (o *withHTMLOptions) SetHighlightingOption(c *Config) {
-	if o.value != nil {
-		for _, v := range o.value {
-			v.SetHTMLOption(&c.Config)
-		}
-	}
-}
-
-// WithHTMLOptions is functional option that wraps goldmark HTMLRenderer options.
-func WithHTMLOptions(opts ...html.Option) Option {
-	return &withHTMLOptions{opts}
-}
-
-const optStyle renderer.OptionName = "HighlightingStyle"
-const optCustomStyle renderer.OptionName = "HighlightingCustomStyle"
-
-var highlightLinesAttrName = []byte("hl_lines")
-
-var styleAttrName = []byte("hl_style")
-var nohlAttrName = []byte("nohl")
-var linenosAttrName = []byte("linenos")
-var linenosTableAttrValue = []byte("table")
-var linenosInlineAttrValue = []byte("inline")
-var linenostartAttrName = []byte("linenostart")
-
-type withStyle struct {
-	value string
-}
-
-func (o *withStyle) SetConfig(c *renderer.Config) {
-	c.Options[optStyle] = o.value
-}
-
-func (o *withStyle) SetHighlightingOption(c *Config) {
-	c.Style = o.value
-}
+// HTMLRendererOption is a functional option for HTMLRenderer.
+type HTMLRendererOption func(*htmlRendererConfig)
 
 // WithStyle is a functional option that changes highlighting style.
-func WithStyle(style string) Option {
-	return &withStyle{style}
-}
-
-type withCustomStyle struct {
-	value *chroma.Style
-}
-
-func (o *withCustomStyle) SetConfig(c *renderer.Config) {
-	c.Options[optCustomStyle] = o.value
-}
-
-func (o *withCustomStyle) SetHighlightingOption(c *Config) {
-	c.CustomStyle = o.value
-}
-
-// WithStyle is a functional option that changes highlighting style.
-func WithCustomStyle(style *chroma.Style) Option {
-	return &withCustomStyle{style}
-}
-
-const optCSSWriter renderer.OptionName = "HighlightingCSSWriter"
-
-type withCSSWriter struct {
-	value io.Writer
-}
-
-func (o *withCSSWriter) SetConfig(c *renderer.Config) {
-	c.Options[optCSSWriter] = o.value
-}
-
-func (o *withCSSWriter) SetHighlightingOption(c *Config) {
-	c.CSSWriter = o.value
-}
-
-// WithCSSWriter is a functional option that sets io.Writer for CSS data.
-func WithCSSWriter(w io.Writer) Option {
-	return &withCSSWriter{w}
-}
-
-const optGuessLanguage renderer.OptionName = "HighlightingGuessLanguage"
-
-type withGuessLanguage struct {
-	value bool
-}
-
-func (o *withGuessLanguage) SetConfig(c *renderer.Config) {
-	c.Options[optGuessLanguage] = o.value
-}
-
-func (o *withGuessLanguage) SetHighlightingOption(c *Config) {
-	c.GuessLanguage = o.value
-}
-
-// WithGuessLanguage is a functional option that toggles language guessing
-// if none provided.
-func WithGuessLanguage(b bool) Option {
-	return &withGuessLanguage{value: b}
-}
-
-const optWrapperRenderer renderer.OptionName = "HighlightingWrapperRenderer"
-
-type withWrapperRenderer struct {
-	value WrapperRenderer
-}
-
-func (o *withWrapperRenderer) SetConfig(c *renderer.Config) {
-	c.Options[optWrapperRenderer] = o.value
-}
-
-func (o *withWrapperRenderer) SetHighlightingOption(c *Config) {
-	c.WrapperRenderer = o.value
-}
-
-// WithWrapperRenderer is a functional option that sets WrapperRenderer that
-// renders wrapper elements like div, pre, etc.
-func WithWrapperRenderer(w WrapperRenderer) Option {
-	return &withWrapperRenderer{w}
-}
-
-const optCodeBlockOptions renderer.OptionName = "HighlightingCodeBlockOptions"
-
-type withCodeBlockOptions struct {
-	value CodeBlockOptions
-}
-
-func (o *withCodeBlockOptions) SetConfig(c *renderer.Config) {
-	c.Options[optWrapperRenderer] = o.value
-}
-
-func (o *withCodeBlockOptions) SetHighlightingOption(c *Config) {
-	c.CodeBlockOptions = o.value
-}
-
-// WithCodeBlockOptions is a functional option that sets CodeBlockOptions that
-// allows setting Chroma options per code block.
-func WithCodeBlockOptions(c CodeBlockOptions) Option {
-	return &withCodeBlockOptions{value: c}
-}
-
-const optFormatOptions renderer.OptionName = "HighlightingFormatOptions"
-
-type withFormatOptions struct {
-	value []chromahtml.Option
-}
-
-func (o *withFormatOptions) SetConfig(c *renderer.Config) {
-	if _, ok := c.Options[optFormatOptions]; !ok {
-		c.Options[optFormatOptions] = []chromahtml.Option{}
+//
+// Supported styles are defined under https://github.com/alecthomas/chroma/tree/master/formatters.
+func WithStyle(style string) HTMLRendererOption {
+	return func(c *htmlRendererConfig) {
+		c.style = style
 	}
-	c.Options[optFormatOptions] = append(c.Options[optFormatOptions].([]chromahtml.Option), o.value...)
 }
 
-func (o *withFormatOptions) SetHighlightingOption(c *Config) {
-	c.FormatOptions = append(c.FormatOptions, o.value...)
+// WithCustomStyle is a functional option that changes highlighting style.
+//
+// Pass in a custom Chroma style. If this is not nil, the Style string will be ignored.
+func WithCustomStyle(style *chroma.Style) HTMLRendererOption {
+	return func(c *htmlRendererConfig) {
+		c.customStyle = style
+	}
 }
 
-// WithFormatOptions is a functional option that wraps chroma HTML formatter options.
-func WithFormatOptions(opts ...chromahtml.Option) Option {
-	return &withFormatOptions{opts}
+// WithGuessLanguage is a functional option that toggles language guessing if none provided.
+//
+// If the guessing fails, we will fall back to a text lexer.
+// Note that while Chroma's API supports language guessing, the implementation
+// is not there yet, so you will currently always get the basic text lexer.
+func WithGuessLanguage(b ...bool) HTMLRendererOption {
+	return func(c *htmlRendererConfig) {
+		if len(b) > 0 {
+			c.guessLanguage = b[0]
+		} else {
+			c.guessLanguage = true
+		}
+	}
 }
 
-// HTMLRenderer struct is a renderer.NodeRenderer implementation for the extension.
-type HTMLRenderer struct {
-	Config
+// WithFormatterOptions is a functional option that wraps chroma HTML formatter options.
+//
+// See https://github.com/alecthomas/chroma#the-html-formatter for details.
+func WithFormatterOptions(opts ...chromahtml.Option) HTMLRendererOption {
+	return func(c *htmlRendererConfig) {
+		c.formatterOptions = append(c.formatterOptions, opts...)
+	}
 }
 
-// NewHTMLRenderer builds a new HTMLRenderer with given options and returns it.
-func NewHTMLRenderer(opts ...Option) renderer.NodeRenderer {
-	r := &HTMLRenderer{
-		Config: NewConfig(),
+// WithCodeBlockFormatterOptions is a functional option that allows set Chroma options per code block.
+func WithCodeBlockFormatterOptions(f func(*ast.CodeBlock, []byte,
+	renderer.Context) []chromahtml.Option) HTMLRendererOption {
+	return func(c *htmlRendererConfig) {
+		c.codeBlockFormatterOptions = f
+	}
+}
+
+var cssMapKey = renderer.NewContextKey()
+
+// WithCssMap sets `map[string]string` reference for CSS data in the [renderer.Context].
+//
+// If `WithClasses()`(FormatterOption) is enabled, renderer will write CSS data corresponds to the style to
+// the given map. Keys are style names, and values are CSS data.
+func WithCSSMap(rc renderer.Context, m map[string]string) renderer.Context {
+	rc.Set(cssMapKey, m)
+	return rc
+}
+
+type htmlRenderer struct {
+	config htmlRendererConfig
+}
+
+// NewHTMLRenderer returns a new [html.Extension] .
+func NewHTMLRenderer(opts ...HTMLRendererOption) html.Extension {
+	cfg := htmlRendererConfig{
+		style: "github",
+		codeBlockFormatterOptions: func(_ *ast.CodeBlock, _ []byte, _ renderer.Context) []chromahtml.Option {
+			return []chromahtml.Option{}
+		},
 	}
 	for _, opt := range opts {
-		opt.SetHighlightingOption(&r.Config)
+		opt(&cfg)
 	}
-	return r
+	return &htmlRenderer{config: cfg}
 }
 
-// RegisterFuncs implements NodeRenderer.RegisterFuncs.
-func (r *HTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
-	reg.Register(ast.KindFencedCodeBlock, r.renderFencedCodeBlock)
-}
+// HTMLRenderer is a default [html.Extension] for highlighted fenced code blocks.
+var HTMLRenderer = NewHTMLRenderer()
 
-func getAttributes(node *ast.FencedCodeBlock, infostr []byte) ImmutableAttributes {
-	if node.Attributes() != nil {
-		return &immutableAttributes{node}
-	}
-	if infostr != nil {
-		attrStartIdx := -1
-
-		for idx, char := range infostr {
-			if char == '{' {
-				attrStartIdx = idx
-				break
+func (r *htmlRenderer) RendererOptions(_ *html.Config) []html.Option {
+	decorator := func(next html.NodeRenderer) html.NodeRenderer {
+		return html.NodeRendererFunc(func(w io.Writer, source []byte, node ast.Node,
+			entering bool, rc renderer.Context) (ast.WalkStatus, error) {
+			n := node.(*ast.CodeBlock)
+			if n.CodeBlockKind != ast.CodeBlockKindFenced {
+				return next.Render(w, source, n, entering, rc)
 			}
-		}
-		if attrStartIdx > 0 {
-			n := ast.NewTextBlock() // dummy node for storing attributes
-			attrStr := infostr[attrStartIdx:]
-			if attrs, hasAttr := parser.ParseAttributes(text.NewReader(attrStr)); hasAttr {
-				for _, attr := range attrs {
-					n.SetAttribute(attr.Name, attr.Value)
-				}
-				return &immutableAttributes{n}
-			}
-		}
+			return r.render(w, source, n, entering, next, rc)
+		})
 	}
-	return nil
+
+	return []html.Option{
+		html.WithNodeRendererDecorator(ast.KindCodeBlock, decorator),
+	}
 }
 
-func (r *HTMLRenderer) renderFencedCodeBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-	n := node.(*ast.FencedCodeBlock)
+func (r *htmlRenderer) render(
+	writer io.Writer, source []byte, node ast.Node, entering bool, next html.NodeRenderer, rc renderer.Context) (ast.WalkStatus, error) {
 	if !entering {
 		return ast.WalkContinue, nil
 	}
-	language := n.Language(source)
 
-	chromaFormatterOptions := make([]chromahtml.Option, len(r.FormatOptions))
-	copy(chromaFormatterOptions, r.FormatOptions)
+	w := writer.(util.BufWriter)
+	n := node.(*ast.CodeBlock)
 
-	style := r.CustomStyle
+	language, lok := n.Language(source)
+	formatterOptions := make([]chromahtml.Option, len(r.config.formatterOptions))
+	copy(formatterOptions, r.config.formatterOptions)
+	style := r.config.customStyle
 	if style == nil {
-		style = styles.Get(r.Style)
+		style = styles.Get(r.config.style)
 	}
 	nohl := false
-
-	var info []byte
-	if n.Info != nil {
-		info = n.Info.Segment.Value(source)
+	var linenostart int
+	linenostart, ok := parseAttribute[int](n, "linenostart", source)
+	if ok {
+		formatterOptions = append(formatterOptions, chromahtml.BaseLineNumber(linenostart))
+	} else {
+		linenostart = 1
 	}
-	attrs := getAttributes(n, info)
-	if attrs != nil {
-		baseLineNumber := 1
-		if linenostartAttr, ok := attrs.Get(linenostartAttrName); ok {
-			if linenostart, ok := linenostartAttr.(float64); ok {
-				baseLineNumber = int(linenostart)
-				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.BaseLineNumber(baseLineNumber))
-			}
+	var hlRanges [][2]int
+	if hllinesv, ok := parseAttribute[any](n, "hl_lines", source); ok {
+		var hllines []any
+		if v, ok := hllinesv.(float64); ok {
+			hllines = append(hllines, v)
 		}
-		if linesAttr, hasLinesAttr := attrs.Get(highlightLinesAttrName); hasLinesAttr {
-			if lines, ok := linesAttr.([]interface{}); ok {
-				var hlRanges [][2]int
-				for _, l := range lines {
-					if ln, ok := l.(float64); ok {
-						hlRanges = append(hlRanges, [2]int{int(ln) + baseLineNumber - 1, int(ln) + baseLineNumber - 1})
-					}
-					if rng, ok := l.([]uint8); ok {
-						slices := strings.Split(string([]byte(rng)), "-")
-						lhs, err := strconv.Atoi(slices[0])
-						if err != nil {
-							continue
-						}
-						rhs := lhs
-						if len(slices) > 1 {
-							rhs, err = strconv.Atoi(slices[1])
-							if err != nil {
-								continue
-							}
-						}
-						hlRanges = append(hlRanges, [2]int{lhs + baseLineNumber - 1, rhs + baseLineNumber - 1})
-					}
-				}
-				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.HighlightLines(hlRanges))
-			}
+		if v, ok := hllinesv.([]any); ok {
+			hllines = append(hllines, v...)
 		}
-		if styleAttr, hasStyleAttr := attrs.Get(styleAttrName); hasStyleAttr {
-			if st, ok := styleAttr.([]uint8); ok {
-				styleStr := string([]byte(st))
-				style = styles.Get(styleStr)
-			}
+		if v, ok := hllinesv.(string); ok {
+			hllines = append(hllines, v)
 		}
-		if _, hasNohlAttr := attrs.Get(nohlAttrName); hasNohlAttr {
-			nohl = true
+		if v, ok := hllinesv.([]byte); ok { // goldmark_v_attribute compatibilities
+			hllines = append(hllines, string(v))
 		}
 
-		if linenosAttr, ok := attrs.Get(linenosAttrName); ok {
-			switch v := linenosAttr.(type) {
-			case bool:
-				chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.WithLineNumbers(v))
-			case []uint8:
-				if v != nil {
-					chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.WithLineNumbers(true))
+		for _, l := range hllines {
+			if ln, ok := l.(float64); ok {
+				hlRanges = append(hlRanges, [2]int{int(ln) + linenostart - 1, int(ln) + linenostart - 1})
+			}
+			if rngb, ok := l.([]byte); ok { // goldmark_v_attribute compatibilities
+				l = string(rngb)
+			}
+			if rng, ok := l.(string); ok {
+				slices := strings.Split(rng, "-")
+				lhs, err := strconv.Atoi(slices[0])
+				if err != nil {
+					continue
 				}
-				if bytes.Equal(v, linenosTableAttrValue) {
-					chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.LineNumbersInTable(true))
-				} else if bytes.Equal(v, linenosInlineAttrValue) {
-					chromaFormatterOptions = append(chromaFormatterOptions, chromahtml.LineNumbersInTable(false))
+				rhs := lhs
+				if len(slices) > 1 {
+					rhs, err = strconv.Atoi(slices[1])
+					if err != nil {
+						continue
+					}
 				}
+				hlRanges = append(hlRanges, [2]int{lhs + linenostart - 1, rhs + linenostart - 1})
+			}
+		}
+	}
+	if len(hlRanges) > 0 {
+		formatterOptions = append(formatterOptions, chromahtml.HighlightLines(hlRanges))
+	}
+
+	if hlstyle, ok := parseAttribute[string](n, "hl_style", source); ok {
+		style = styles.Get(hlstyle)
+	}
+	if _, ok := n.Attribute("nohl"); ok {
+		nohl = true
+	}
+	if linenos, ok := parseAttribute[any](n, "linenos", source); ok {
+		var sv string
+		switch v := linenos.(type) {
+		case bool:
+			formatterOptions = append(formatterOptions, chromahtml.WithLineNumbers(v))
+		case []byte: // goldmark_v_attribute compatibilities
+			sv = string(v)
+		case string:
+			sv = v
+		}
+
+		if sv != "" {
+			formatterOptions = append(formatterOptions, chromahtml.WithLineNumbers(true))
+			if sv == "table" {
+				formatterOptions = append(formatterOptions, chromahtml.LineNumbersInTable(true))
+			}
+			if sv == "inline" {
+				formatterOptions = append(formatterOptions, chromahtml.LineNumbersInTable(false))
 			}
 		}
 	}
 
 	var lexer chroma.Lexer
-	if language != nil {
-		lexer = lexers.Get(string(language))
+	if lok {
+		lexer = lexers.Get(language)
 	}
-	if !nohl && (lexer != nil || r.GuessLanguage) {
+	if !nohl && (lexer != nil || r.config.guessLanguage) {
 		if style == nil {
 			style = styles.Fallback
 		}
 		var buffer bytes.Buffer
-		l := n.Lines().Len()
-		for i := 0; i < l; i++ {
-			line := n.Lines().At(i)
-			buffer.Write(line.Value(source))
-		}
+		_, _ = n.Value.WriteTo(&buffer, source)
 
 		if lexer == nil {
 			lexer = lexers.Analyse(buffer.String())
 			if lexer == nil {
 				lexer = lexers.Fallback
 			}
-			language = []byte(strings.ToLower(lexer.Config().Name))
+			// language = strings.ToLower(lexer.Config().Name)
 		}
 		lexer = chroma.Coalesce(lexer)
 
 		iterator, err := lexer.Tokenise(nil, buffer.String())
 		if err == nil {
-			c := newCodeBlockContext(language, true, attrs)
-
-			if r.CodeBlockOptions != nil {
-				chromaFormatterOptions = append(chromaFormatterOptions, r.CodeBlockOptions(c)...)
-			}
-			formatter := chromahtml.New(chromaFormatterOptions...)
-			if r.WrapperRenderer != nil {
-				r.WrapperRenderer(w, c, true)
-			}
+			fopts := append(formatterOptions, r.config.codeBlockFormatterOptions(n, source, rc)...)
+			formatter := chromahtml.New(fopts...)
 			_ = formatter.Format(w, style, iterator) == nil
-			if r.WrapperRenderer != nil {
-				r.WrapperRenderer(w, c, false)
-			}
-			if r.CSSWriter != nil {
-				_ = formatter.WriteCSS(r.CSSWriter, style)
+			if m, ok := rc.Get(cssMapKey).(map[string]string); ok {
+				if _, ok := m[style.Name]; !ok {
+					var cssbuf bytes.Buffer
+					_ = formatter.WriteCSS(&cssbuf, style)
+					m[style.Name] = cssbuf.String()
+				}
 			}
 			return ast.WalkContinue, nil
 		}
 	}
 
-	var c CodeBlockContext
-	if r.WrapperRenderer != nil {
-		c = newCodeBlockContext(language, false, attrs)
-		r.WrapperRenderer(w, c, true)
-	} else {
-		_, _ = w.WriteString("<pre><code")
-		language := n.Language(source)
-		if language != nil {
-			_, _ = w.WriteString(" class=\"language-")
-			r.Writer.Write(w, language)
-			_, _ = w.WriteString("\"")
-		}
-		_ = w.WriteByte('>')
-	}
-	l := n.Lines().Len()
-	for i := 0; i < l; i++ {
-		line := n.Lines().At(i)
-		r.Writer.RawWrite(w, line.Value(source))
-	}
-	if r.WrapperRenderer != nil {
-		r.WrapperRenderer(w, c, false)
-	} else {
-		_, _ = w.WriteString("</code></pre>\n")
-	}
-	return ast.WalkContinue, nil
-}
-
-type highlighting struct {
-	options []Option
-}
-
-// Highlighting is a goldmark.Extender implementation.
-var Highlighting = &highlighting{
-	options: []Option{},
-}
-
-// NewHighlighting returns a new extension with given options.
-func NewHighlighting(opts ...Option) goldmark.Extender {
-	return &highlighting{
-		options: opts,
-	}
-}
-
-// Extend implements goldmark.Extender.
-func (e *highlighting) Extend(m goldmark.Markdown) {
-	m.Renderer().AddOptions(renderer.WithNodeRenderers(
-		util.Prioritized(NewHTMLRenderer(e.options...), 200),
-	))
+	_, _ = next.Render(writer, source, node, true, rc)
+	return next.Render(writer, source, node, false, rc)
 }

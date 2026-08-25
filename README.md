@@ -1,5 +1,4 @@
-goldmark-highlighting
-=========================
+## goldmark-highlighting
 
 goldmark-highlighting is an extension for the [goldmark](http://github.com/yuin/goldmark) 
 that adds syntax-highlighting to the fenced code blocks.
@@ -7,15 +6,26 @@ that adds syntax-highlighting to the fenced code blocks.
 goldmark-highlighting uses [chroma](https://github.com/alecthomas/chroma) as a
 syntax highlighter.
 
-Installation
---------------------
+### Compatibility
+
+- goldmark-highlighting/v3 uses goldmark/v2, chroma/v3, json/v2
+  - minimum Go version: 1.27
+  - you can build goldmark-highlighting/v3 with `goldmark_v1_attribute` build tag to use goldmark/v1 compatible attribute parsing.
+- For goldmark/v1, please use goldmark-highlighting/v2.
+
+### Breaking changes from v2 to v3
+
+- `WithCSSWriter(w io.Writer)` is removed. Use `WithCSSMap(rc renderer.Context, m map[string]string)` instead.
+- `WithFormatOptions(opts ...chromahtml.Option)` is renamed to `WithFormatterOptions(opts ...chromahtml.Option)`.
+- `WithWrapperRenderer(w WrapperRenderer) Option` is removed. Use goldmark/v2 `NodeRendererDecorator` instead.
+
+### Installation
 
 ```
-go get github.com/yuin/goldmark-highlighting/v2
+go get github.com/yuin/goldmark-highlighting/v3
 ```
 
-Usage
---------------------
+### Usage
 
 ```go
 package main
@@ -24,17 +34,17 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/v2"
 
-	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
-	highlighting "github.com/yuin/goldmark-highlighting/v2"
+	chromahtml "github.com/alecthomas/chroma/v3/formatters/html"
+	highlighting "github.com/yuin/goldmark-highlighting/v3"
 )
 
 func main() {
 	mdsrc := `
 		Title
 		=======
-		` + "```" + `
+		` + "```go {hl_lines=2}" + `
 		func main() {
 		    fmt.Println("ok")
 		}
@@ -42,31 +52,38 @@ func main() {
 	`
 
 	// Simple usage
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			highlighting.Highlighting,
-		),
-	)
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.HTMLRenderer))
+	node := p.Parse([]byte(mdsrc))
 	var buf bytes.Buffer
-	if err := markdown.Convert([]byte(mdsrc), &buf); err != nil {
+	if err := r.Render([]byte(mdsrc), &buf, node); err != nil {
 		panic(err)
 	}
 	title := buf.String()
 	fmt.Print(title)
 
 	// Custom configuration
-	markdown2 := goldmark.New(
-		goldmark.WithExtensions(
-			highlighting.NewHighlighting(
-				highlighting.WithStyle("monokai"),
-				highlighting.WithFormatOptions(
-					chromahtml.WithLineNumbers(true),
-				),
+	r := html.New(html.WithExtensions(
+		highlighting.NewHTMLRenderer(
+			highlighting.WithStyle("monokai"),
+			highlighting.WithFormatterOptions(
+				chromahtml.WithClasses(true),
+				chromahtml.WithLineNumbers(false),
 			),
+			highlighting.WithCodeBlockFormatterOptions(
+				func(n *ast.CodeBlock, source []byte, _ renderer.Context) []chromahtml.Option {
+					if language, ok := n.Language(source); ok && language == "go" {
+						return []chromahtml.Option{
+							chromahtml.WithLineNumbers(true),
+						}
+					}
+					return nil
+				}),
 		),
+	),
 	)
 	var buf2 bytes.Buffer
-	if err := markdown2.Convert([]byte(mdsrc), &buf2); err != nil {
+	if err := r.Render([]byte(mdsrc), &buf2, node); err != nil {
 		panic(err)
 	}
 	title2 := buf2.String()
@@ -75,10 +92,8 @@ func main() {
 
 ```
 
-License
---------------------
+### License
 MIT
 
-Author
---------------------
+### Author
 Yusuke Inuzuka

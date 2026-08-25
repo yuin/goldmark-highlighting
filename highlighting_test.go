@@ -1,4 +1,4 @@
-package highlighting
+package highlighting_test
 
 import (
 	"bytes"
@@ -6,86 +6,105 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alecthomas/chroma/v2"
-	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/testutil"
-	"github.com/yuin/goldmark/util"
+	"github.com/alecthomas/chroma/v3"
+	chromahtml "github.com/alecthomas/chroma/v3/formatters/html"
+	highlighting "github.com/yuin/goldmark-highlighting/v3"
+	"github.com/yuin/goldmark/v2/ast"
+	"github.com/yuin/goldmark/v2/parser"
+	"github.com/yuin/goldmark/v2/renderer"
+	"github.com/yuin/goldmark/v2/renderer/html"
+	"github.com/yuin/goldmark/v2/testutil"
 )
 
+func TestParseAttributes(t *testing.T) {
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	source := []byte("```go {linenos=table hl_lines=[1,3]}\npackage main\n\nfunc main() {\n\tfmt.Println(\"Hello, World!\")\n}\n```\n")
+	node := p.Parse(source)
+
+	codeblock := node.FirstChild()
+	if codeblock.Kind() != ast.KindCodeBlock {
+		t.Fatalf("expected code block, got %v", codeblock.Kind())
+	}
+	if a, ok := codeblock.Attribute("linenos"); !ok || a.Value(source) != "table" {
+		t.Fatalf("expected linenos=table, got %v", a.Value(source))
+	}
+	if a, ok := codeblock.Attribute("hl_lines"); !ok || a.Value(source) != "[1,3]" {
+		t.Fatalf("expected hl_lines=[1,3], got %v", a.Value(source))
+	}
+}
+
 func TestHighlighting(t *testing.T) {
-	var css bytes.Buffer
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			NewHighlighting(
-				WithStyle("monokai"),
-				WithCSSWriter(&css),
-				WithFormatOptions(
-					chromahtml.WithClasses(true),
-					chromahtml.WithLineNumbers(false),
-				),
-				WithWrapperRenderer(func(w util.BufWriter, c CodeBlockContext, entering bool) {
-					_, ok := c.Language()
-					if entering {
-						if !ok {
-							w.WriteString("<pre><code>")
-							return
-						}
-						w.WriteString(`<div class="highlight">`)
-					} else {
-						if !ok {
-							w.WriteString("</pre></code>")
-							return
-						}
-						w.WriteString(`</div>`)
-					}
-				}),
-				WithCodeBlockOptions(func(c CodeBlockContext) []chromahtml.Option {
-					if language, ok := c.Language(); ok {
-						// Turn on line numbers for Go only.
-						if string(language) == "go" {
-							return []chromahtml.Option{
-								chromahtml.WithLineNumbers(true),
-							}
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(
+		highlighting.NewHTMLRenderer(
+			highlighting.WithStyle("monokai"),
+			highlighting.WithFormatterOptions(
+				chromahtml.WithClasses(true),
+				chromahtml.WithLineNumbers(false),
+			),
+			highlighting.WithCodeBlockFormatterOptions(
+				func(n *ast.CodeBlock, source []byte, _ renderer.Context) []chromahtml.Option {
+					if language, ok := n.Language(source); ok && language == "go" {
+						return []chromahtml.Option{
+							chromahtml.WithLineNumbers(true),
 						}
 					}
 					return nil
 				}),
-			),
 		),
+	),
 	)
-	var buffer bytes.Buffer
-	if err := markdown.Convert([]byte(`
+
+	convert := func(source string, m map[string]string) string {
+		var buffer bytes.Buffer
+		node := p.Parse([]byte(source))
+		if m != nil {
+			rc := highlighting.WithCSSMap(renderer.NewContext(), m)
+			if err := r.Render(&buffer, []byte(source), node, renderer.WithContext(rc)); err != nil {
+				t.Fatal(err)
+			}
+			return buffer.String()
+		}
+		if err := r.Render(&buffer, []byte(source), node); err != nil {
+			t.Fatal(err)
+		}
+		return buffer.String()
+	}
+	css := map[string]string{}
+	result := convert(`
 Title
 =======
-`+"``` go\n"+`func main() {
+`+"```go\n"+`func main() {
     fmt.Println("ok")
 }
 `+"```"+`
-`), &buffer); err != nil {
-		t.Fatal(err)
-	}
+`, css)
 
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	expected := strings.TrimSpace(`
 <h1>Title</h1>
-<div class="highlight"><pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-</span></span><span class="line"><span class="ln">2</span><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
-</span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="p">}</span>
-</span></span></code></pre></div>
-`) {
-		t.Error("failed to render HTML\n")
+<pre class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="kd">func</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="ln">2</span><span class="cl"><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="p">}</span><span class="w">
+</span></span></span></code></pre>
+`)
+
+	if strings.TrimSpace(result) != expected {
+		diff := testutil.DiffPretty([]byte(expected), []byte(result))
+		t.Errorf("incorrect HTML.\n%s", string(diff))
 	}
 
-	expected := strings.TrimSpace(`/* Background */ .bg { color: #f8f8f2; background-color: #272822; }
-/* PreWrapper */ .chroma { color: #f8f8f2; background-color: #272822; }
+	expected = strings.TrimSpace(`
+/* Background */ .bg { color: #f8f8f2; background-color: #272822; }
+/* PreWrapper */ .chroma { color: #f8f8f2; background-color: #272822; -webkit-text-size-adjust: none; }
 /* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #f8f8f2; background-color: #3c3d38 }
 /* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #f8f8f2; background-color: #3c3d38 }
 /* Error */ .chroma .err { color: #960050; background-color: #1e0010 }
+/* LineLink */ .chroma .lnlinks { outline: none; text-decoration: none; color: inherit }
 /* LineTableTD */ .chroma .lntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
 /* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; }
 /* LineHighlight */ .chroma .hl { background-color: #3c3d38 }
-/* LineNumbersTable */ .chroma .lnt { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
-/* LineNumbers */ .chroma .ln { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
+/* LineNumbersTable */ .chroma .lnt { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
+/* LineNumbers */ .chroma .ln { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #7f7f7f }
 /* Line */ .chroma .line { display: flex; }
 /* Keyword */ .chroma .k { color: #66d9ef }
 /* KeywordConstant */ .chroma .kc { color: #66d9ef }
@@ -99,9 +118,10 @@ Title
 /* NameConstant */ .chroma .no { color: #66d9ef }
 /* NameDecorator */ .chroma .nd { color: #a6e22e }
 /* NameException */ .chroma .ne { color: #a6e22e }
-/* NameFunction */ .chroma .nf { color: #a6e22e }
 /* NameOther */ .chroma .nx { color: #a6e22e }
 /* NameTag */ .chroma .nt { color: #f92672 }
+/* NameFunction */ .chroma .nf { color: #a6e22e }
+/* NameFunctionMagic */ .chroma .fm { color: #a6e22e }
 /* Literal */ .chroma .l { color: #ae81ff }
 /* LiteralDate */ .chroma .ld { color: #e6db74 }
 /* LiteralString */ .chroma .s { color: #e6db74 }
@@ -127,6 +147,7 @@ Title
 /* LiteralNumberOct */ .chroma .mo { color: #ae81ff }
 /* Operator */ .chroma .o { color: #f92672 }
 /* OperatorWord */ .chroma .ow { color: #f92672 }
+/* OperatorReserved */ .chroma .or { color: #f92672 }
 /* Comment */ .chroma .c { color: #75715e }
 /* CommentHashbang */ .chroma .ch { color: #75715e }
 /* CommentMultiline */ .chroma .cm { color: #75715e }
@@ -138,10 +159,10 @@ Title
 /* GenericEmph */ .chroma .ge { font-style: italic }
 /* GenericInserted */ .chroma .gi { color: #a6e22e }
 /* GenericStrong */ .chroma .gs { font-weight: bold }
-/* GenericSubheading */ .chroma .gu { color: #75715e }`)
+/* GenericSubheading */ .chroma .gu { color: #75715e }
+`)
 
-	gotten := strings.TrimSpace(css.String())
-
+	gotten := strings.TrimSpace(css["monokai"])
 	if expected != gotten {
 		diff := testutil.DiffPretty([]byte(expected), []byte(gotten))
 		t.Errorf("incorrect CSS.\n%s", string(diff))
@@ -149,64 +170,73 @@ Title
 }
 
 func TestHighlighting2(t *testing.T) {
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			Highlighting,
-		),
-	)
-	var buffer bytes.Buffer
-	if err := markdown.Convert([]byte(`
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer()))
+	convert := func(source string) string {
+		var buffer bytes.Buffer
+		node := p.Parse([]byte(source))
+		if err := r.Render(&buffer, []byte(source), node); err != nil {
+			t.Fatal(err)
+		}
+		return buffer.String()
+	}
+	result := convert(`
 Title
 =======
-`+"```"+`
+` + "```" + `
 func main() {
     fmt.Println("ok")
 }
-`+"```"+`
-`), &buffer); err != nil {
-		t.Fatal(err)
-	}
+` + "```" + `
+`)
 
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	expected := strings.TrimSpace(`
 <h1>Title</h1>
 <pre><code>func main() {
     fmt.Println(&quot;ok&quot;)
 }
 </code></pre>
-`) {
-		t.Error("failed to render HTML")
+`)
+	if strings.TrimSpace(result) != expected {
+		diff := testutil.DiffPretty([]byte(expected), []byte(result))
+		t.Errorf("incorrect HTML.\n%s", string(diff))
 	}
 }
 
 func TestHighlighting3(t *testing.T) {
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			Highlighting,
-		),
-	)
-	var buffer bytes.Buffer
-	if err := markdown.Convert([]byte(`
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer()))
+	convert := func(source string) string {
+		var buffer bytes.Buffer
+		node := p.Parse([]byte(source))
+		if err := r.Render(&buffer, []byte(source), node); err != nil {
+			t.Fatal(err)
+		}
+		return buffer.String()
+	}
+	result := convert(`
 Title
 =======
 
-`+"```"+`cpp {hl_lines=[1,2]}
+` + "```" + `cpp {hl_lines=[1,2]}
 #include <iostream>
 int main() {
     std::cout<< "hello" << std::endl;
 }
-`+"```"+`
-`), &buffer); err != nil {
-		t.Fatal(err)
-	}
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+` + "```" + `
+`)
+
+	expected := strings.TrimSpace(`
 <h1>Title</h1>
-<pre tabindex="0" style="background-color:#fff;display:grid;"><code><span style="display:flex; background-color:#e5e5e5"><span><span style="color:#999;font-weight:bold;font-style:italic">#include</span> <span style="color:#999;font-weight:bold;font-style:italic">&lt;iostream&gt;</span><span style="color:#999;font-weight:bold;font-style:italic">
-</span></span></span><span style="display:flex; background-color:#e5e5e5"><span><span style="color:#999;font-weight:bold;font-style:italic"></span><span style="color:#458;font-weight:bold">int</span> <span style="color:#900;font-weight:bold">main</span>() {
-</span></span><span style="display:flex;"><span>    std<span style="color:#000;font-weight:bold">::</span>cout<span style="color:#000;font-weight:bold">&lt;&lt;</span> <span style="color:#d14">&#34;hello&#34;</span> <span style="color:#000;font-weight:bold">&lt;&lt;</span> std<span style="color:#000;font-weight:bold">::</span>endl;
-</span></span><span style="display:flex;"><span>}
+<pre style="background-color:#f7f7f7;-webkit-text-size-adjust:none;display:grid;"><code><span style="display:flex; background-color:#dedede"><span><span style="color:#57606a">#include</span> <span style="color:#57606a">&lt;iostream&gt;</span><span style="color:#57606a">
+</span></span></span><span style="display:flex; background-color:#dedede"><span><span style="color:#cf222e">int</span> <span style="color:#6639ba">main</span><span style="color:#1f2328">()</span> <span style="color:#1f2328">{</span>
+</span></span><span style="display:flex;"><span>    std<span style="color:#0550ae">::</span>cout<span style="color:#0550ae">&lt;&lt;</span> <span style="color:#0a3069">&#34;hello&#34;</span> <span style="color:#0550ae">&lt;&lt;</span> std<span style="color:#0550ae">::</span>endl<span style="color:#1f2328">;</span>
+</span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span>
 </span></span></code></pre>
-`) {
-		t.Error("failed to render HTML")
+`)
+	if strings.TrimSpace(result) != expected {
+		diff := testutil.DiffPretty([]byte(expected), []byte(result))
+		t.Errorf("incorrect HTML.\n%s", string(diff))
 	}
 }
 
@@ -243,79 +273,73 @@ func TestHighlightingCustom(t *testing.T) {
 		chroma.Error:                "border:#e2777a",
 	})
 
-	var css bytes.Buffer
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			NewHighlighting(
-				WithStyle("monokai"), // to make sure it is overrided even if present
-				WithCustomStyle(custom),
-				WithCSSWriter(&css),
-				WithFormatOptions(
-					chromahtml.WithClasses(true),
-					chromahtml.WithLineNumbers(false),
-				),
-				WithWrapperRenderer(func(w util.BufWriter, c CodeBlockContext, entering bool) {
-					_, ok := c.Language()
-					if entering {
-						if !ok {
-							w.WriteString("<pre><code>")
-							return
-						}
-						w.WriteString(`<div class="highlight">`)
-					} else {
-						if !ok {
-							w.WriteString("</pre></code>")
-							return
-						}
-						w.WriteString(`</div>`)
-					}
-				}),
-				WithCodeBlockOptions(func(c CodeBlockContext) []chromahtml.Option {
-					if language, ok := c.Language(); ok {
-						// Turn on line numbers for Go only.
-						if string(language) == "go" {
-							return []chromahtml.Option{
-								chromahtml.WithLineNumbers(true),
-							}
-						}
-					}
-					return nil
-				}),
-			),
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
+		highlighting.WithStyle("monokai"), // to make sure it is overrided even if present
+		highlighting.WithCustomStyle(custom),
+		highlighting.WithFormatterOptions(
+			chromahtml.WithClasses(true),
+			chromahtml.WithLineNumbers(false),
 		),
-	)
-	var buffer bytes.Buffer
-	if err := markdown.Convert([]byte(`
+		highlighting.WithCodeBlockFormatterOptions(
+			func(n *ast.CodeBlock, source []byte, _ renderer.Context) []chromahtml.Option {
+				if language, ok := n.Language(source); ok && language == "go" {
+					return []chromahtml.Option{
+						chromahtml.WithLineNumbers(true),
+					}
+				}
+				return nil
+			}),
+	)))
+
+	convert := func(source string, m map[string]string) string {
+		var buffer bytes.Buffer
+		node := p.Parse([]byte(source))
+		if m != nil {
+			rc := highlighting.WithCSSMap(renderer.NewContext(), m)
+			if err := r.Render(&buffer, []byte(source), node, renderer.WithContext(rc)); err != nil {
+				t.Fatal(err)
+			}
+			return buffer.String()
+		}
+		if err := r.Render(&buffer, []byte(source), node); err != nil {
+			t.Fatal(err)
+		}
+		return buffer.String()
+	}
+	css := map[string]string{}
+	result := convert(`
 Title
 =======
 `+"``` go\n"+`func main() {
     fmt.Println("ok")
 }
 `+"```"+`
-`), &buffer); err != nil {
-		t.Fatal(err)
-	}
+`, css)
 
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
+	expected := strings.TrimSpace(`
 <h1>Title</h1>
-<div class="highlight"><pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
-</span></span><span class="line"><span class="ln">2</span><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span>
-</span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="p">}</span>
-</span></span></code></pre></div>
-`) {
-		t.Error("failed to render HTML", buffer.String())
+<pre class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="kd">func</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="ln">2</span><span class="cl"><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">&#34;ok&#34;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="p">}</span><span class="w">
+</span></span></span></code></pre>
+`)
+	if strings.TrimSpace(result) != expected {
+		diff := testutil.DiffPretty([]byte(expected), []byte(result))
+		t.Errorf("incorrect HTML.\n%s", string(diff))
 	}
 
-	expected := strings.TrimSpace(`/* Background */ .bg { color: #cccccc; background-color: #1d1d1d; }
-/* PreWrapper */ .chroma { color: #cccccc; background-color: #1d1d1d; }
+	expected = strings.TrimSpace(`
+/* Background */ .bg { color: #cccccc; background-color: #1d1d1d; }
+/* PreWrapper */ .chroma { color: #cccccc; background-color: #1d1d1d; -webkit-text-size-adjust: none; }
 /* LineNumbers targeted by URL anchor */ .chroma .ln:target { color: #cccccc; background-color: #333333 }
 /* LineNumbersTable targeted by URL anchor */ .chroma .lnt:target { color: #cccccc; background-color: #333333 }
-/* Error */ .chroma .err {  }
+/* LineLink */ .chroma .lnlinks { outline: none; text-decoration: none; color: inherit }
 /* LineTableTD */ .chroma .lntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
 /* LineTable */ .chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; }
 /* LineHighlight */ .chroma .hl { background-color: #333333 }
-/* LineNumbersTable */ .chroma .lnt { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
-/* LineNumbers */ .chroma .ln { white-space: pre; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
+/* LineNumbersTable */ .chroma .lnt { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
+/* LineNumbers */ .chroma .ln { white-space: pre; -webkit-user-select: none; user-select: none; margin-right: 0.4em; padding: 0 0.4em 0 0.4em;color: #666666 }
 /* Line */ .chroma .line { display: flex; }
 /* Keyword */ .chroma .k { color: #cc99cd }
 /* KeywordConstant */ .chroma .kc { color: #cc99cd }
@@ -324,11 +348,17 @@ Title
 /* KeywordPseudo */ .chroma .kp { color: #cc99cd }
 /* KeywordReserved */ .chroma .kr { color: #cc99cd }
 /* KeywordType */ .chroma .kt { color: #cc99cd }
-/* NameBuiltin */ .chroma .nb { color: #f08d49 }
 /* NameClass */ .chroma .nc { color: #f08d49 }
 /* NameException */ .chroma .ne { color: #666699; font-weight: bold }
-/* NameFunction */ .chroma .nf { color: #f08d49 }
+/* NameBuiltin */ .chroma .nb { color: #f08d49 }
+/* NameBuiltinPseudo */ .chroma .bp { color: #f08d49 }
 /* NameVariable */ .chroma .nv { color: #00cdcd }
+/* NameVariableClass */ .chroma .vc { color: #00cdcd }
+/* NameVariableGlobal */ .chroma .vg { color: #00cdcd }
+/* NameVariableInstance */ .chroma .vi { color: #00cdcd }
+/* NameVariableMagic */ .chroma .vm { color: #00cdcd }
+/* NameFunction */ .chroma .nf { color: #f08d49 }
+/* NameFunctionMagic */ .chroma .fm { color: #f08d49 }
 /* LiteralString */ .chroma .s { color: #7ec699 }
 /* LiteralStringAffix */ .chroma .sa { color: #7ec699 }
 /* LiteralStringBacktick */ .chroma .sb { color: #7ec699 }
@@ -352,6 +382,7 @@ Title
 /* LiteralNumberOct */ .chroma .mo { color: #f08d49 }
 /* Operator */ .chroma .o { color: #67cdcc }
 /* OperatorWord */ .chroma .ow { color: #cdcd00 }
+/* OperatorReserved */ .chroma .or { color: #67cdcc }
 /* Comment */ .chroma .c { color: #999999 }
 /* CommentHashbang */ .chroma .ch { color: #999999 }
 /* CommentMultiline */ .chroma .cm { color: #999999 }
@@ -369,10 +400,10 @@ Title
 /* GenericStrong */ .chroma .gs { font-weight: bold }
 /* GenericSubheading */ .chroma .gu { color: #800080; font-weight: bold }
 /* GenericTraceback */ .chroma .gt { color: #0044dd }
-/* GenericUnderline */ .chroma .gl { text-decoration: underline }`)
+/* GenericUnderline */ .chroma .gl { text-decoration: underline }
+`)
 
-	gotten := strings.TrimSpace(css.String())
-
+	gotten := strings.TrimSpace(css["custom"])
 	if expected != gotten {
 		diff := testutil.DiffPretty([]byte(expected), []byte(gotten))
 		t.Errorf("incorrect CSS.\n%s", string(diff))
@@ -380,27 +411,32 @@ Title
 }
 
 func TestHighlightingHlLines(t *testing.T) {
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			NewHighlighting(
-				WithFormatOptions(
-					chromahtml.WithClasses(true),
-				),
-			),
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
+		highlighting.WithFormatterOptions(
+			chromahtml.WithClasses(true),
 		),
-	)
+	)))
+
+	convert := func(source string) string {
+		var buffer bytes.Buffer
+		node := p.Parse([]byte(source))
+		if err := r.Render(&buffer, []byte(source), node); err != nil {
+			t.Fatal(err)
+		}
+		return buffer.String()
+	}
 
 	for i, test := range []struct {
 		attributes string
 		expect     []int
 	}{
-		{`hl_lines=["2"]`, []int{2}},
-		{`hl_lines=["2-3",5],linenostart=5`, []int{2, 3, 5}},
+		{`hl_lines=2`, []int{2}},
+		{`hl_lines=["2-3",5] linenostart=5`, []int{2, 3, 5}},
 		{`hl_lines=["2-3"]`, []int{2, 3}},
-		{`hl_lines=["2-3",5],linenostart="5"`, []int{2, 3}}, // linenostart must be a number. string values are ignored
+		{`hl_lines=["2-3",5] linenostart="5"`, []int{2, 3}}, // linenostart must be a number. string values are ignored
 	} {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			var buffer bytes.Buffer
 			codeBlock := fmt.Sprintf(`bash {%s}
 LINE1
 LINE2
@@ -412,16 +448,14 @@ LINE7
 LINE8
 `, test.attributes)
 
-			if err := markdown.Convert([]byte(`
-`+"```"+codeBlock+"```"+`
-`), &buffer); err != nil {
-				t.Fatal(err)
-			}
+			result := convert(`
+` + "```" + codeBlock + "```" + `
+`)
 
 			for _, line := range test.expect {
 				expectStr := fmt.Sprintf("<span class=\"line hl\"><span class=\"cl\">LINE%d\n</span></span>", line)
-				if !strings.Contains(buffer.String(), expectStr) {
-					t.Fatal("got\n", buffer.String(), "\nexpected\n", expectStr)
+				if !strings.Contains(result, expectStr) {
+					t.Fatal("got\n", result, "\nexpected\n", expectStr)
 				}
 			}
 		})
@@ -466,79 +500,77 @@ func TestHighlightingLinenos(t *testing.T) {
 		{`linenos=table`, false, false, outputLineNumbersInTable},
 	} {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			markdown := goldmark.New(
-				goldmark.WithExtensions(
-					NewHighlighting(
-						WithFormatOptions(
-							chromahtml.WithLineNumbers(test.lineNumbers),
-							chromahtml.LineNumbersInTable(test.lineNumbersInTable),
-							chromahtml.WithPreWrapper(nopPreWrapper{}),
-							chromahtml.WithClasses(true),
-						),
-					),
+			p := parser.New(parser.WithExtensions(highlighting.Parser))
+			r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
+				highlighting.WithFormatterOptions(
+					chromahtml.WithLineNumbers(test.lineNumbers),
+					chromahtml.LineNumbersInTable(test.lineNumbersInTable),
+					chromahtml.WithPreWrapper(nopPreWrapper{}),
+					chromahtml.WithClasses(true),
 				),
-			)
+			)))
 
-			var buffer bytes.Buffer
+			convert := func(source string) string {
+				var buffer bytes.Buffer
+				node := p.Parse([]byte(source))
+				if err := r.Render(&buffer, []byte(source), node); err != nil {
+					t.Fatal(err)
+				}
+				return buffer.String()
+			}
+
 			codeBlock := fmt.Sprintf(`bash {%s}
 LINE1
 `, test.attributes)
 
 			content := "```" + codeBlock + "```"
+			result := convert(content)
 
-			if err := markdown.Convert([]byte(content), &buffer); err != nil {
-				t.Fatal(err)
-			}
-
-			s := strings.TrimSpace(buffer.String())
-
-			if s != test.expect {
-				t.Fatal("got\n", s, "\nexpected\n", test.expect)
+			if strings.TrimSpace(result) != test.expect {
+				t.Fatal("got\n", result, "\nexpected\n", test.expect)
 			}
 		})
 	}
 }
 
 func TestHighlightingGuessLanguage(t *testing.T) {
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			NewHighlighting(
-				WithGuessLanguage(true),
-				WithFormatOptions(
-					chromahtml.WithClasses(true),
-					chromahtml.WithLineNumbers(true),
-				),
-			),
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
+		highlighting.WithGuessLanguage(true),
+		highlighting.WithFormatterOptions(
+			chromahtml.WithClasses(true),
+			chromahtml.WithLineNumbers(true),
 		),
-	)
+	)))
+
 	var buffer bytes.Buffer
-	if err := markdown.Convert([]byte("```"+`
-LINE	
-`+"```"), &buffer); err != nil {
+	source := []byte("```" + `
+LINE
+` + "```")
+	node := p.Parse(source)
+	if err := r.Render(&buffer, source, node); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
-<pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl">LINE	
+	expected := strings.TrimSpace(`
+<pre class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl">LINE
 </span></span></code></pre>
-`) {
-		t.Errorf("render mismatch, got\n%s", buffer.String())
+`)
+	if strings.TrimSpace(buffer.String()) != expected {
+		t.Errorf("render mismatch, got\n%s\n\nexpected:\n%s", buffer.String(), expected)
 	}
 }
 
 func TestCoalesceNeeded(t *testing.T) {
-	markdown := goldmark.New(
-		goldmark.WithExtensions(
-			NewHighlighting(
-				// WithGuessLanguage(true),
-				WithFormatOptions(
-					chromahtml.WithClasses(true),
-					chromahtml.WithLineNumbers(true),
-				),
-			),
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
+		highlighting.WithGuessLanguage(true),
+		highlighting.WithFormatterOptions(
+			chromahtml.WithClasses(true),
+			chromahtml.WithLineNumbers(true),
 		),
-	)
+	)))
 	var buffer bytes.Buffer
-	if err := markdown.Convert([]byte("```http"+`
+	source := []byte("```http" + `
 GET /foo HTTP/1.1
 Content-Type: application/json
 User-Agent: foo
@@ -546,11 +578,14 @@ User-Agent: foo
 {
   "hello": "world"
 }
-`+"```"), &buffer); err != nil {
+` + "```")
+	node := p.Parse(source)
+	if err := r.Render(&buffer, source, node); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(`
-<pre tabindex="0" class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="nf">GET</span> <span class="nn">/foo</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
+
+	expected := strings.TrimSpace(`
+<pre class="chroma"><code><span class="line"><span class="ln">1</span><span class="cl"><span class="nf">GET</span> <span class="nn">/foo</span> <span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span>
 </span></span><span class="line"><span class="ln">2</span><span class="cl"><span class="n">Content-Type</span><span class="o">:</span> <span class="l">application/json</span>
 </span></span><span class="line"><span class="ln">3</span><span class="cl"><span class="n">User-Agent</span><span class="o">:</span> <span class="l">foo</span>
 </span></span><span class="line"><span class="ln">4</span><span class="cl">
@@ -558,7 +593,9 @@ User-Agent: foo
 </span></span><span class="line"><span class="ln">6</span><span class="cl">  <span class="nt">&#34;hello&#34;</span><span class="p">:</span> <span class="s2">&#34;world&#34;</span>
 </span></span><span class="line"><span class="ln">7</span><span class="cl"><span class="p">}</span>
 </span></span></code></pre>
-`) {
+`)
+
+	if strings.TrimSpace(buffer.String()) != expected {
 		t.Errorf("render mismatch, got\n%s", buffer.String())
 	}
 }
