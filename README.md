@@ -92,6 +92,16 @@ func main() {
 
 ```
 
+### Use goldmark-highlighting with other code block extensions
+
+This extension is implemented using `NodeRendererDecorator`. You can skip this extension and use other code block extensions by using the `WithExcludeLanguages` or `WithExcludeFunc` options.
+
+```go
+r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
+	highlighting.WithExcludeLanguages("mermaid"), // exclude mermaid code blocks( to render mermaid code as diagrams)
+)))
+```
+
 ### License
 MIT
 

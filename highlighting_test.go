@@ -599,3 +599,40 @@ User-Agent: foo
 		t.Errorf("render mismatch, got\n%s", buffer.String())
 	}
 }
+
+func TestExclusion(t *testing.T) {
+	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
+		highlighting.WithExcludeLanguages("bash"),
+	)))
+
+	var buffer bytes.Buffer
+	source := []byte("```bash" + `
+echo "Hello, World!"
+` + "```\n\n```go" + `
+package main
+
+func main() {
+    fmt.Println("Hello, World!")
+}
+` + "```")
+	node := p.Parse(source)
+	if err := r.Render(&buffer, source, node); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := `<pre><code class="language-bash">echo &quot;Hello, World!&quot;
+</code></pre>
+<pre style="background-color:#f7f7f7;-webkit-text-size-adjust:none;"><code><span style="display:flex;"><span><span style="color:#cf222e">package</span><span style="color:#fff"> </span><span style="color:#1f2328">main</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#cf222e">func</span><span style="color:#fff"> </span><span style="color:#6639ba">main</span><span style="color:#1f2328">()</span><span style="color:#fff"> </span><span style="color:#1f2328">{</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#fff">    </span><span style="color:#1f2328">fmt</span><span style="color:#1f2328">.</span><span style="color:#6639ba">Println</span><span style="color:#1f2328">(</span><span style="color:#0a3069">&#34;Hello, World!&#34;</span><span style="color:#1f2328">)</span><span style="color:#fff">
+</span></span></span><span style="display:flex;"><span><span style="color:#1f2328">}</span><span style="color:#fff">
+</span></span></span></code></pre>
+`
+
+	if strings.TrimSpace(buffer.String()) != strings.TrimSpace(expected) {
+		diff := testutil.DiffPretty([]byte(expected), buffer.Bytes())
+		t.Errorf("render mismatch:\n%s", string(diff))
+	}
+}

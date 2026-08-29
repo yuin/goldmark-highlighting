@@ -7,6 +7,7 @@ package highlighting
 import (
 	"bytes"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -74,12 +75,17 @@ func (e *parserExtension) ParserOptions(_ *parser.Config) []parser.Option {
 // Parser is a default [parser.Extension] for highlighted fenced code blocks.
 var Parser = NewParser()
 
+// ExcludeFunc is a function type that can be used to exclude certain code blocks from being highlighted.
+type ExcludeFunc func(n *ast.CodeBlock, source []byte, rc renderer.Context) bool
+
 type htmlRendererConfig struct {
 	style string
 
 	customStyle *chroma.Style
 
 	guessLanguage bool
+
+	excludeFunc ExcludeFunc
 
 	formatterOptions []chromahtml.Option
 
@@ -95,6 +101,25 @@ type HTMLRendererOption func(*htmlRendererConfig)
 func WithStyle(style string) HTMLRendererOption {
 	return func(c *htmlRendererConfig) {
 		c.style = style
+	}
+}
+
+// WithExcludeFunc is a functional option that sets a function to exclude certain
+// code blocks from being highlighted.
+func WithExcludeFunc(f ExcludeFunc) HTMLRendererOption {
+	return func(c *htmlRendererConfig) {
+		c.excludeFunc = f
+	}
+}
+
+// WithExcludeLanguages is a functional option that sets a list of
+// languages to exclude from being highlighted.
+func WithExcludeLanguages(langs ...string) HTMLRendererOption {
+	return func(c *htmlRendererConfig) {
+		c.excludeFunc = func(n *ast.CodeBlock, source []byte, rc renderer.Context) bool {
+			language, _ := n.Language(source)
+			return slices.Contains(langs, language)
+		}
 	}
 }
 
@@ -190,12 +215,18 @@ func (r *htmlRenderer) RendererOptions(_ *html.Config) []html.Option {
 
 func (r *htmlRenderer) render(
 	writer io.Writer, source []byte, node ast.Node, entering bool, next html.NodeRenderer, rc renderer.Context) (ast.WalkStatus, error) {
+	n := node.(*ast.CodeBlock)
+	if r.config.excludeFunc != nil {
+		if r.config.excludeFunc(n, source, rc) {
+			return next.Render(writer, source, node, entering, rc)
+		}
+	}
+
 	if !entering {
 		return ast.WalkContinue, nil
 	}
 
 	w := writer.(util.BufWriter)
-	n := node.(*ast.CodeBlock)
 
 	language, lok := n.Language(source)
 	formatterOptions := make([]chromahtml.Option, len(r.config.formatterOptions))
