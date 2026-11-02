@@ -52,8 +52,8 @@ func main() {
 	`
 
 	// Simple usage
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
-	r := html.New(html.WithExtensions(highlighting.HTMLRenderer))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
+	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer()))
 	node := p.Parse([]byte(mdsrc))
 	var buf bytes.Buffer
 	if err := r.Render([]byte(mdsrc), &buf, node); err != nil {

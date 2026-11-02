@@ -73,6 +73,8 @@ func (e *parserExtension) ParserOptions(_ *parser.Config) []parser.Option {
 }
 
 // Parser is a default [parser.Extension] for highlighted fenced code blocks.
+//
+// Deprecated: use [NewParser] instead.
 var Parser = NewParser()
 
 // ExcludeFunc is a function type that can be used to exclude certain code blocks from being highlighted.
@@ -194,6 +196,8 @@ func NewHTMLRenderer(opts ...HTMLRendererOption) html.Extension {
 }
 
 // HTMLRenderer is a default [html.Extension] for highlighted fenced code blocks.
+//
+// Deprecated: use [NewHTMLRenderer] instead.
 var HTMLRenderer = NewHTMLRenderer()
 
 func (r *htmlRenderer) RendererOptions(_ *html.Config) []html.Option {

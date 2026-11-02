@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/alecthomas/chroma/v3 v3.0.0-alpha.5
-	github.com/yuin/goldmark/v2 v2.0.0
+	github.com/yuin/goldmark/v2 v2.1.14
 )
 
 require github.com/dlclark/regexp2/v2 v2.2.2 // indirect

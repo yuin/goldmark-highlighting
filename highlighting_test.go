@@ -17,7 +17,7 @@ import (
 )
 
 func TestParseAttributes(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	source := []byte("```go {linenos=table hl_lines=[1,3]}\npackage main\n\nfunc main() {\n\tfmt.Println(\"Hello, World!\")\n}\n```\n")
 	node := p.Parse(source)
 
@@ -34,7 +34,7 @@ func TestParseAttributes(t *testing.T) {
 }
 
 func TestHighlighting(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(
 		highlighting.NewHTMLRenderer(
 			highlighting.WithStyle("monokai"),
@@ -170,7 +170,7 @@ Title
 }
 
 func TestHighlighting2(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer()))
 	convert := func(source string) string {
 		var buffer bytes.Buffer
@@ -204,7 +204,7 @@ func main() {
 }
 
 func TestHighlighting3(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer()))
 	convert := func(source string) string {
 		var buffer bytes.Buffer
@@ -273,7 +273,7 @@ func TestHighlightingCustom(t *testing.T) {
 		chroma.Error:                "border:#e2777a",
 	})
 
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
 		highlighting.WithStyle("monokai"), // to make sure it is overrided even if present
 		highlighting.WithCustomStyle(custom),
@@ -411,7 +411,7 @@ Title
 }
 
 func TestHighlightingHlLines(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
 		highlighting.WithFormatterOptions(
 			chromahtml.WithClasses(true),
@@ -500,7 +500,7 @@ func TestHighlightingLinenos(t *testing.T) {
 		{`linenos=table`, false, false, outputLineNumbersInTable},
 	} {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			p := parser.New(parser.WithExtensions(highlighting.Parser))
+			p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 			r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
 				highlighting.WithFormatterOptions(
 					chromahtml.WithLineNumbers(test.lineNumbers),
@@ -534,7 +534,7 @@ LINE1
 }
 
 func TestHighlightingGuessLanguage(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
 		highlighting.WithGuessLanguage(true),
 		highlighting.WithFormatterOptions(
@@ -561,7 +561,7 @@ LINE
 }
 
 func TestCoalesceNeeded(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
 		highlighting.WithGuessLanguage(true),
 		highlighting.WithFormatterOptions(
@@ -601,7 +601,7 @@ User-Agent: foo
 }
 
 func TestExclusion(t *testing.T) {
-	p := parser.New(parser.WithExtensions(highlighting.Parser))
+	p := parser.New(parser.WithExtensions(highlighting.NewParser()))
 	r := html.New(html.WithExtensions(highlighting.NewHTMLRenderer(
 		highlighting.WithExcludeLanguages("bash"),
 	)))
